@@ -1,11 +1,12 @@
 "use client"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
-  LayoutDashboard, Users, FolderOpen,
-  BookOpen, Settings, Zap, ChevronRight, Mail
+  LayoutDashboard, Users,
+  BookOpen, Settings, Zap, ChevronRight, Mail, LogOut
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 const NAV = [
   { href: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },
@@ -17,6 +18,14 @@ const NAV = [
 
 export default function Sidebar() {
   const path = usePathname()
+  const router = useRouter()
+  const supabase = createClientComponentClient()
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   return (
     <aside style={{ width: "var(--sidebar-w)" }}
       className="fixed inset-y-0 left-0 bg-white border-r border-slate-100 flex flex-col z-30 shadow-sm">
@@ -54,9 +63,15 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Gmail Status */}
-      <div className="px-4 py-4 border-t border-slate-100">
+      {/* Bottom */}
+      <div className="px-4 py-4 border-t border-slate-100 space-y-2">
         <GmailStatus />
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-[12px] text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
+          <LogOut size={13} />
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
   )
