@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+:root {
+  --brand: #4F46E5;
+  --brand-light: #EEF2FF;
+  --brand-dark: #3730A3;
+  --surface: #F8FAFC;
+  --border: #E2E8F0;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --sidebar-w: 240px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Pretendard', 'Inter', system-ui, sans-serif;
+  background: var(--surface);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 스크롤바 커스텀 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* SSE 로그 애니메이션 */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.log-line { animation: fadeInUp 0.2s ease; }
+
+/* 상태 뱃지 공통 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 테이블 공통 */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  background: #F1F5F9;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 12px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #F1F5F9;
+  vertical-align: middle;
+}
+.data-table tr:hover td { background: #F8FAFC; }
