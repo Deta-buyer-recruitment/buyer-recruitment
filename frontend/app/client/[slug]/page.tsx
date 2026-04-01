@@ -184,7 +184,7 @@ export default function ClientPage() {
   )
 
   const { customer, timeline, progress, stats, files, meetings, inquiries } = data
-  const countries = [...new Set((data.buyers || []).map((b: any) => b.country).filter(Boolean))] as string[]
+  const countries = Array.from(new Set((data.buyers || []).map((b: any) => b.country).filter(Boolean))) as string[]
   const weeklyData = buildWeeklyData(stats, data.weekly_data)
 
   // ── 대시보드 ──
