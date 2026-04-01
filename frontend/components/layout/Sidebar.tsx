@@ -6,7 +6,11 @@ import {
   BookOpen, Settings, Zap, ChevronRight, Mail, LogOut
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const NAV = [
   { href: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },

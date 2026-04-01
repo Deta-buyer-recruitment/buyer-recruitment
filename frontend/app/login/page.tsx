@@ -1,13 +1,16 @@
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
 import { Zap, Mail, Lock, Eye, EyeOff, ExternalLink, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
   const [email, setEmail]       = useState("")
   const [password, setPassword] = useState("")
