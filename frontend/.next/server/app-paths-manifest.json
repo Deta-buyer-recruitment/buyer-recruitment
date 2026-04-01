@@ -1,9 +1,7 @@
 {
-  "/dashboard/page": "app/dashboard/page.js",
-  "/contacts/page": "app/contacts/page.js",
-  "/buyers/page": "app/buyers/page.js",
-  "/campaigns/[id]/page": "app/campaigns/[id]/page.js",
   "/campaigns/new/page": "app/campaigns/new/page.js",
+  "/buyers/page": "app/buyers/page.js",
+  "/contacts/page": "app/contacts/page.js",
   "/campaigns/page": "app/campaigns/page.js",
   "/client/[slug]/page": "app/client/[slug]/page.js"
 }
