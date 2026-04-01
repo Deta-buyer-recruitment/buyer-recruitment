@@ -22,7 +22,7 @@ export default function ContactLogPage() {
     const data = await api.buyers.list()
     setBuyers(data)
     setFiltered(data)
-    const names = [...new Set(data.map((b: any) => b.customers?.name).filter(Boolean))] as string[]
+    const names = Array.from(new Set(data.map((b: any) => b.customers?.name).filter(Boolean))) as string[]
     setCustomers(names)
     setLoading(false)
   }
