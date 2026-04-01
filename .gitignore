@@ -1,2 +1,6 @@
 frontend/node_modules/
 backend/venv/
+backend/credentials.json
+backend/token.json
+backend/.env
+backend/.env.example
