@@ -15,13 +15,13 @@ async function apiFetch(path: string, options?: RequestInit) {
 // ── Customers ────────────────────────────────────────────
 export const api = {
   customers: {
-    list: () => apiFetch("/api/campaigns"),
+    list: () => apiFetch("/api/campaigns/"),
   },
 
   // ── Campaigns ──────────────────────────────────────────
   campaigns: {
     list: (customerId?: string) =>
-      apiFetch(`/api/campaigns${customerId ? `?customer_id=${customerId}` : ""}`),
+      apiFetch(`/api/campaigns/${customerId ? `?customer_id=${customerId}` : ""}`),
     get: (id: string) => apiFetch(`/api/campaigns/${id}`),
     create: (data: Record<string, unknown>) =>
       apiFetch("/api/campaigns/", { method: "POST", body: JSON.stringify(data) }),
