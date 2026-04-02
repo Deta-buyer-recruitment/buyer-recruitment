@@ -18,12 +18,12 @@ export default function LoginPage() {
   const [error, setError]       = useState("")
 
   const handleLogin = async () => {
-    if (!email || !password) { setError("이메일과 비밀번호를 입력해주세요"); return }
+    if (!email || !password) { setError("Please enter your Email"); return }
     setLoading(true)
     setError("")
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-      if (authError) { setError("이메일 또는 비밀번호가 올바르지 않습니다"); return }
+      if (authError) { setError("Please check your email or password"); return }
 
       const { data: profile } = await supabase
         .from("profiles")
@@ -64,7 +64,7 @@ export default function LoginPage() {
           <h2 className="text-lg font-bold text-slate-800 mb-6">DETA PM Login</h2>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">이메일</label>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">E-mail</label>
               <div className="relative">
                 <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -78,7 +78,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">비밀번호</label>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Password</label>
               <div className="relative">
                 <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -109,7 +109,7 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-2">
               {loading
                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />로그인 중...</>
-                : "로그인"}
+                : "Log In"}
             </button>
           </div>
         </div>

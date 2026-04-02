@@ -1,11 +1,13 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
 import { api } from "@/lib/api"
 import { toast } from "sonner"
-import { ArrowLeft, Upload, CheckCircle } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle, Building2 } from "lucide-react"
 import Link from "next/link"
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
 const FIELD_GROUPS = [
   {
@@ -14,8 +16,8 @@ const FIELD_GROUPS = [
       { key: "company_name",        label: "Client Company Name", placeholder: "e.g. ABC Corp",                    required: true },
       { key: "target_country",      label: "Target Country",      placeholder: "e.g. Germany, Pakistan",           required: true },
       { key: "product_description", label: "Product Description", placeholder: "e.g. Industrial plastic packaging", required: true },
-      { key: "hs_code",             label: "HS Code",             placeholder: "e.g. 3923.10",                     required: true },
-      { key: "company_website",     label: "Client Website",      placeholder: "https://...",                      required: true },
+      { key: "hs_code",             label: "HS Code",             placeholder: "e.g. 3923.10",                     required: false },
+      { key: "company_website",     label: "Client Website",      placeholder: "https://...",                      required: false },
     ]
   },
   {
@@ -40,24 +42,44 @@ export default function NewProjectPage() {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<"info" | "upload">("info")
+  const [customers, setCustomers] = useState<any[]>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState("")
+
+  useEffect(() => {
+    // 고객사 목록 로드
+    fetch(`${API}/api/campaigns/`)
+      .then(r => r.json())
+      .then(campaigns => {
+        // campaigns에서 고객사 중복 제거
+        const seen = new Set()
+        const unique: any[] = []
+        campaigns.forEach((c: any) => {
+          if (c.customer_id && !seen.has(c.customer_id)) {
+            seen.add(c.customer_id)
+            unique.push({ id: c.customer_id, name: c.customers?.name || c.campaign_info?.company_name })
+          }
+        })
+        setCustomers(unique)
+        if (unique.length > 0) setSelectedCustomerId(unique[0].id)
+      })
+      .catch(() => {})
+  }, [])
 
   const set = (key: string, val: string) => setForm(p => ({ ...p, [key]: val }))
 
   const isInfoComplete = ["company_name","target_country","product_description",
-    "hs_code","company_website","usp","signature_name",
-    "signature_title","signature_phone"].every(k => form[k])
+    "usp","signature_name","signature_title","signature_phone"].every(k => form[k])
+    && !!selectedCustomerId
 
   const submit = async () => {
     setLoading(true)
     try {
-      // 1. 프로젝트 생성
       const camp = await api.campaigns.create({
         ...form,
-        customer_id: "",
+        customer_id: selectedCustomerId,
         followup_interval_days: Number(form.followup_interval_days) || 7
       })
 
-      // 2. 바이어 리스트 업로드 (있는 경우만)
       if (file) {
         const uploadResult = await api.campaigns.uploadBuyers(camp.id, camp.customer_id, file)
         toast.success(`Project created! ${uploadResult.inserted} buyers uploaded`)
@@ -65,7 +87,6 @@ export default function NewProjectPage() {
         toast.success("Project created! You can upload buyers from the project page.")
       }
 
-      // 3. 바이어 업로드까지만 하고 Agent는 실행하지 않음 → 상세 페이지로 이동
       router.push(`/campaigns/${camp.id}`)
     } catch (e: any) {
       toast.error(e.message)
@@ -105,6 +126,31 @@ export default function NewProjectPage() {
 
         {step === "info" && (
           <div className="space-y-6">
+            {/* 고객사 선택 */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                <Building2 size={12} /> Client Company
+              </h2>
+              {customers.length > 0 ? (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Select Client <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={selectedCustomerId}
+                    onChange={e => setSelectedCustomerId(e.target.value)}
+                    className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                    <option value="">-- Select client --</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Loading clients...</p>
+              )}
+            </div>
+
             {FIELD_GROUPS.map(group => (
               <div key={group.title} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                 <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">{group.title}</h2>
@@ -128,6 +174,7 @@ export default function NewProjectPage() {
                 </div>
               </div>
             ))}
+
             <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Follow-up Settings</h2>
               <div>
@@ -137,6 +184,7 @@ export default function NewProjectPage() {
                   className="w-32 text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
               </div>
             </div>
+
             <button disabled={!isInfoComplete} onClick={() => setStep("upload")}
               className="w-full bg-indigo-600 text-white py-3.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               Next — Upload Buyer List
@@ -146,6 +194,12 @@ export default function NewProjectPage() {
 
         {step === "upload" && (
           <div className="space-y-4">
+            <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
+              <p className="text-xs text-indigo-700">
+                <span className="font-semibold">Client:</span> {customers.find(c => c.id === selectedCustomerId)?.name}
+              </p>
+            </div>
+
             <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Upload Buyer List</h2>
               <p className="text-xs text-slate-500 mb-4">
@@ -165,24 +219,6 @@ export default function NewProjectPage() {
               <div className="mt-4 text-xs text-slate-400 space-y-1">
                 <p>✓ Supported columns: company / country / website / email / contact_name / phone</p>
                 <p>✓ Korean column names also supported automatically</p>
-              </div>
-            </div>
-
-            {/* 다음 단계 안내 */}
-            <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
-              <p className="text-xs font-semibold text-indigo-700 mb-2">After creating the project, you can:</p>
-              <div className="space-y-1.5">
-                {[
-                  "Run website search for buyers",
-                  "Extract contacts via Hunter.io",
-                  "Run ABM analysis",
-                  "Generate & send email templates",
-                ].map((step, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-indigo-600">
-                    <div className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-[10px]">{i + 1}</div>
-                    {step}
-                  </div>
-                ))}
               </div>
             </div>
 

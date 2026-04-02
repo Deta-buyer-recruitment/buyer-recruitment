@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 class CampaignCreate(BaseModel):
-    customer_id: str
+    customer_id: Optional[str] = ""
     company_name: str
     target_country: str
     product_description: str
@@ -28,8 +28,13 @@ class CampaignCreate(BaseModel):
 @router.post("/")
 async def create_campaign(payload: CampaignCreate):
     sb = get_supabase()
+    # customer_id가 없으면 첫 번째 고객사로 설정
+    customer_id = payload.customer_id
+    if not customer_id:
+        customers = sb.table("customers").select("id").limit(1).execute()
+        customer_id = customers.data[0]["id"] if customers.data else None
     data = {
-        "customer_id": payload.customer_id,
+        "customer_id": customer_id,
         "status": "draft",
         "campaign_info": {
             "company_name": payload.company_name,
@@ -71,7 +76,7 @@ async def get_campaign(campaign_id: str):
 @router.post("/{campaign_id}/upload-buyers")
 async def upload_buyers(
     campaign_id: str,
-    customer_id: str = Form(...),
+    customer_id: Optional[str] = "" = Form(...),
     file: UploadFile = File(...)
 ):
     """
