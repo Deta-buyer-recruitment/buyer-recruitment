@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { Shield, Eye, Edit3, Plus, Key, X, Send, Lock, ChevronDown, ChevronUp, Briefcase } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
 const ROLE_META = {
   editor:  { label: "Editor",  desc: "Full access — create projects, run Agent, send emails", icon: Edit3,    color: "#4F46E5", bg: "#EEF2FF" },

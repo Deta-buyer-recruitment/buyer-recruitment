@@ -10,7 +10,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { cn } from "@/lib/utils"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 const STORAGE_KEY = (slug: string) => `client_auth_${slug}`
 
 const CATEGORY_LABELS: Record<string, string> = {

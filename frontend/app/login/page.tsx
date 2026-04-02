@@ -128,7 +128,7 @@ export default function LoginPage() {
             <p className="text-xs text-indigo-300 font-mono">deta.ai.kr/client/<span className="text-white">[고객사 ID]</span></p>
           </div>
           <div className="bg-white/10 rounded-xl px-3 py-2.5">
-            <p className="text-xs text-indigo-300 font-mono">담당 PM 김훈기 팀장 <span className="text-white">[hunki.kim@industryarc.com]</span></p>
+            <p className="text-xs text-indigo-300 font-mono">담당 PM : 김훈기 팀장 <span className="text-white">[hunki.kim@industryarc.com]</span></p>
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
             예시: deta.ai.kr/client/deta · URL을 모르시는 경우 담당 PM에게 문의해 주세요.

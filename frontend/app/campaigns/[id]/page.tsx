@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 type LogLine = { message: string; level: string; timestamp: string }
 type Tab = "overview" | "templates"
 
@@ -401,7 +401,7 @@ function TemplateChat({ campaign, buyers, templates, onSave }: {
   const [previewRound, setPreviewRound] = useState("r1_initial")
   const chatEndRef = useRef<HTMLDivElement>(null)
   const fileRef    = useRef<HTMLInputElement>(null)
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+  const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
   useEffect(() => { setCurrentTemplates(templates) }, [templates])

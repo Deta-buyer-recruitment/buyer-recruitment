@@ -7,7 +7,7 @@ import { Plus, Trash2, Upload, ArrowLeft, ExternalLink, MessageSquare, Save, X }
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 const STATUS_OPTIONS = [
   { value: "pending",     label: "Not Started" },
   { value: "in_progress", label: "In Progress" },
