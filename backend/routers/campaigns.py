@@ -76,7 +76,7 @@ async def get_campaign(campaign_id: str):
 @router.post("/{campaign_id}/upload-buyers")
 async def upload_buyers(
     campaign_id: str,
-    customer_id: Optional[str] = "" = Form(...),
+    customer_id: str = Form(...),
     file: UploadFile = File(...)
 ):
     """
