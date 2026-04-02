@@ -3,14 +3,13 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createBrowserClient } from "@supabase/ssr"
 import { Zap, Mail, Lock, Eye, EyeOff, ExternalLink, X } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   const [email, setEmail]       = useState("")
   const [password, setPassword] = useState("")
@@ -19,14 +18,13 @@ export default function LoginPage() {
   const [error, setError]       = useState("")
 
   const handleLogin = async () => {
-    if (!email || !password) { setError("Please enter email and password"); return }
+    if (!email || !password) { setError("이메일과 비밀번호를 입력해주세요"); return }
     setLoading(true)
     setError("")
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-      if (authError) { setError(authError.message); return }
+      if (authError) { setError("이메일 또는 비밀번호가 올바르지 않습니다"); return }
 
-      // 권한 확인
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -35,15 +33,14 @@ export default function LoginPage() {
 
       const role = profile?.role || "viewer"
 
-      // 권한에 따라 이동
       if (["editor", "manager", "viewer"].includes(role)) {
         router.push("/dashboard")
       } else {
-        setError("Access denied. Contact your administrator.")
+        setError("접근 권한이 없습니다. 관리자에게 문의해주세요.")
         await supabase.auth.signOut()
       }
     } catch {
-      setError("Connection error. Please try again.")
+      setError("연결 오류가 발생했습니다. 다시 시도해주세요.")
     } finally {
       setLoading(false)
     }
@@ -59,15 +56,15 @@ export default function LoginPage() {
             <Zap size={28} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">BuyerOS</h1>
-          <p className="text-slate-400 text-sm mt-1">Overseas Buyer Outreach Platform</p>
+          <p className="text-slate-400 text-sm mt-1">해외 바이어 발굴 플랫폼</p>
         </div>
 
         {/* 로그인 카드 */}
         <div className="bg-white rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">Team Login</h2>
+          <h2 className="text-lg font-bold text-slate-800 mb-6">팀원 로그인</h2>
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Email</label>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">이메일</label>
               <div className="relative">
                 <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -75,13 +72,13 @@ export default function LoginPage() {
                   onChange={e => setEmail(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleLogin()}
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="이메일을 입력하세요"
                   className="w-full border border-slate-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Password</label>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">비밀번호</label>
               <div className="relative">
                 <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -89,7 +86,7 @@ export default function LoginPage() {
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleLogin()}
                   type={showPw ? "text" : "password"}
-                  placeholder="Enter password"
+                  placeholder="비밀번호를 입력하세요"
                   className="w-full border border-slate-200 rounded-xl pl-9 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
                 <button onClick={() => setShowPw(v => !v)}
@@ -111,8 +108,8 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-2">
               {loading
-                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Signing in...</>
-                : "Sign In"}
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />로그인 중...</>
+                : "로그인"}
             </button>
           </div>
         </div>
@@ -121,16 +118,17 @@ export default function LoginPage() {
         <div className="mt-5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-5">
           <p className="text-xs font-semibold text-slate-300 mb-3 flex items-center gap-1.5">
             <ExternalLink size={12} />
-            For Clients — Project Dashboard
+            고객사 프로젝트 대시보드 안내
           </p>
           <p className="text-xs text-slate-400 mb-3 leading-relaxed">
-            If you are a client, please access your dedicated project dashboard using the URL provided by your project manager.
+            고객사 담당자분께서는 이 페이지가 아닌, 담당 PM으로부터 별도로 안내받으신
+            <span className="text-white font-medium"> 전용 URL</span>로 접속해 주세요.
           </p>
           <div className="bg-white/10 rounded-xl px-3 py-2.5">
-            <p className="text-xs text-indigo-300 font-mono">deta.ai.kr/client/<span className="text-white">[your-slug]</span></p>
+            <p className="text-xs text-indigo-300 font-mono">deta.ai.kr/client/<span className="text-white">[고객사 슬러그]</span></p>
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            e.g. deta.ai.kr/client/sammi — Contact your manager if you don't have the URL.
+            예시: deta.ai.kr/client/sammi · URL을 모르시는 경우 담당 PM에게 문의해 주세요.
           </p>
         </div>
 
