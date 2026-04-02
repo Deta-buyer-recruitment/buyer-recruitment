@@ -61,7 +61,7 @@ export default function LoginPage() {
 
         {/* 로그인 카드 */}
         <div className="bg-white rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">팀원 로그인</h2>
+          <h2 className="text-lg font-bold text-slate-800 mb-6">DETA PM Login</h2>
           <div className="space-y-4">
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1.5 block">이메일</label>
@@ -125,11 +125,14 @@ export default function LoginPage() {
             <span className="text-white font-medium"> 전용 URL</span>로 접속해 주세요.
           </p>
           <div className="bg-white/10 rounded-xl px-3 py-2.5">
-            <p className="text-xs text-indigo-300 font-mono">deta.ai.kr/client/<span className="text-white">[고객사 슬러그]</span></p>
+            <p className="text-xs text-indigo-300 font-mono">deta.ai.kr/client/<span className="text-white">[고객사 ID]</span></p>
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            예시: deta.ai.kr/client/sammi · URL을 모르시는 경우 담당 PM에게 문의해 주세요.
+            예시: deta.ai.kr/client/deta · URL을 모르시는 경우 담당 PM에게 문의해 주세요.
           </p>
+          <div className="bg-white/10 rounded-xl px-3 py-2.5">
+            <p className="text-xs text-indigo-300 font-mono">담당 PM 김훈기 팀장 <span className="text-white">[hunki.kim@industryarc.com]</span></p>
+          </div>
         </div>
 
       </div>
