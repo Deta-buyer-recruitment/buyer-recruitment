@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import {
   Play, Send, ArrowLeft, RefreshCw, ChevronDown, ChevronUp,
   Upload, Edit2, Save, X, Users, Search, Mail, Brain, FileText,
-  MessageSquare, CheckSquare, Square, Image, Paperclip, Bot, User, Zap
+  MessageSquare, CheckSquare, Square, Image, Paperclip, Bot, User, Zap,
+  Trash2, AlertTriangle
 } from "lucide-react"
 import Link from "next/link"
 
@@ -50,6 +51,8 @@ export default function ProjectDetailPage() {
   const [editingInfo, setEditingInfo] = useState(false)
   const [editForm, setEditForm]     = useState<Record<string, string>>({})
   const [savingInfo, setSavingInfo] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
+  const [deleting, setDeleting]     = useState(false)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -103,6 +106,17 @@ export default function ProjectDetailPage() {
       setUploadFile(null); load()
     } catch (e: any) { toast.error(e.message) }
     finally { setUploading(false) }
+  }
+
+  const deleteBuyer = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await fetch(`${API}/api/buyers/${deleteTarget.id}`, { method: "DELETE" })
+      setDeleteTarget(null)
+      load()
+    } catch { }
+    finally { setDeleting(false) }
   }
 
   const saveInfo = async () => {
@@ -382,6 +396,7 @@ export default function ProjectDetailPage() {
                           <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Website</th>
                           <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Email</th>
                           <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">ABM</th>
+                          <th className="px-4 py-2.5"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -412,6 +427,12 @@ export default function ProjectDetailPage() {
                                     </span>
                                   : <span className="text-slate-300">—</span>}
                               </td>
+                              <td className="px-4 py-2">
+                                <button onClick={() => setDeleteTarget(b)}
+                                  className="p-1 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
                             </tr>
                           )
                         })}
@@ -434,6 +455,42 @@ export default function ProjectDetailPage() {
           />
         )}
       </div>
+
+      {/* 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={18} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Delete Buyer</h3>
+                <p className="text-xs text-slate-400 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-1">
+              Are you sure you want to permanently delete:
+            </p>
+            <div className="bg-red-50 rounded-xl px-4 py-3 mb-5">
+              <p className="font-semibold text-slate-800 text-sm">{deleteTarget.company}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{deleteTarget.country} · {deleteTarget.email || "No email"}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteTarget(null)}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50">
+                Cancel
+              </button>
+              <button onClick={deleteBuyer} disabled={deleting}
+                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                {deleting
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Deleting...</>
+                  : <><Trash2 size={13} />Delete</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

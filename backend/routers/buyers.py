@@ -190,3 +190,13 @@ async def export_excel(customer_id: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.delete("/{buyer_id}")
+async def delete_buyer(buyer_id: str):
+    sb = get_supabase()
+    # 컨택 로그 먼저 삭제
+    sb.table("contact_logs").delete().eq("buyer_id", buyer_id).execute()
+    # 바이어 삭제
+    sb.table("buyers").delete().eq("id", buyer_id).execute()
+    return {"success": True}

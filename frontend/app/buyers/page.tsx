@@ -4,17 +4,21 @@ import AppLayout from "@/components/layout/AppLayout"
 import { api } from "@/lib/api"
 import { STATUS_META, cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { Search, ExternalLink, Edit2, Check, X } from "lucide-react"
+import { Search, ExternalLink, Edit2, Check, X, Trash2, AlertTriangle } from "lucide-react"
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
 export default function BuyerListPage() {
-  const [buyers, setBuyers]   = useState<any[]>([])
+  const [buyers, setBuyers]     = useState<any[]>([])
   const [filtered, setFiltered] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch]   = useState("")
+  const [loading, setLoading]   = useState(true)
+  const [search, setSearch]     = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editData, setEditData]   = useState<any>({})
   const [saving, setSaving]       = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
+  const [deleting, setDeleting]   = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -54,6 +58,18 @@ export default function BuyerListPage() {
       load()
     } catch (e: any) { toast.error(e.message) }
     finally { setSaving(false) }
+  }
+
+  const deleteBuyer = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await fetch(`${API}/api/buyers/${deleteTarget.id}`, { method: "DELETE" })
+      toast.success(`${deleteTarget.company} has been deleted.`)
+      setDeleteTarget(null)
+      load()
+    } catch { toast.error("Failed to delete buyer.") }
+    finally { setDeleting(false) }
   }
 
   if (loading) return (
@@ -160,10 +176,16 @@ export default function BuyerListPage() {
                           </button>
                         </div>
                       ) : (
-                        <button onClick={() => startEdit(buyer)}
-                          className="p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
-                          <Edit2 size={13} />
-                        </button>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEdit(buyer)}
+                            className="p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
+                            <Edit2 size={13} />
+                          </button>
+                          <button onClick={() => setDeleteTarget(buyer)}
+                            className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -176,6 +198,42 @@ export default function BuyerListPage() {
           </table>
         </div>
       </div>
+
+      {/* 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={18} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Delete Buyer</h3>
+                <p className="text-xs text-slate-400 mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-1">
+              Are you sure you want to permanently delete:
+            </p>
+            <div className="bg-red-50 rounded-xl px-4 py-3 mb-5">
+              <p className="font-semibold text-slate-800 text-sm">{deleteTarget.company}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{deleteTarget.country} · {deleteTarget.email || "No email"}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteTarget(null)}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50">
+                Cancel
+              </button>
+              <button onClick={deleteBuyer} disabled={deleting}
+                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                {deleting
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Deleting...</>
+                  : <><Trash2 size={13} />Delete</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
