@@ -119,7 +119,7 @@ export default function BuyerListPage() {
                 <th>Website</th>
                 <th>Status</th>
                 <th>Client</th>
-                <th></th>
+                
               </tr>
             </thead>
             <tbody>
@@ -160,35 +160,35 @@ export default function BuyerListPage() {
                           </select>
                         : <span className="badge text-[11px]" style={{ color: statusM.color, background: statusM.bg }}>{statusM.label}</span>}
                     </td>
-                    <td>
-                      <span className="text-xs text-slate-400">{buyer.customers?.name || "—"}</span>
-                    </td>
-                    <td>
-                      {isEditing ? (
-                        <div className="flex gap-1">
-                          <button onClick={() => saveEdit(buyer.id)} disabled={saving}
-                            className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                            <Check size={12} />
-                          </button>
-                          <button onClick={() => setEditingId(null)}
-                            className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200">
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1">
-                          <button onClick={() => startEdit(buyer)}
-                            className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
->
-                            <Edit2 size={13} />
-                          </button>
-                          <button onClick={() => setDeleteTarget(buyer)}
-                            className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
+                  <td>
+  <div className="flex items-center justify-between gap-2">
+    <span className="text-xs text-slate-400">{buyer.customers?.name || "—"}</span>
+    {!isEditing && (
+      <div className="flex gap-1">
+        <button onClick={() => startEdit(buyer)}
+          className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
+          <Edit2 size={13} />
+        </button>
+        <button onClick={() => setDeleteTarget(buyer)}
+          className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors border border-red-200">
+          <Trash2 size={13} />
+        </button>
+      </div>
+    )}
+    {isEditing && (
+      <div className="flex gap-1">
+        <button onClick={() => saveEdit(buyer.id)} disabled={saving}
+          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <Check size={12} />
+        </button>
+        <button onClick={() => setEditingId(null)}
+          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200">
+          <X size={12} />
+        </button>
+      </div>
+    )}
+  </div>
+</td>
                   </tr>
                 )
               })}
