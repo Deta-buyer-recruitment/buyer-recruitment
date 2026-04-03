@@ -596,7 +596,7 @@ async def invite_user(payload: InvitePayload):
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             },
-            json={"email": payload.email},
+            json={"email": payload.email,"redirect_to": "https://deta.ai.kr/set-password" },
             timeout=15,
         )
         data = resp.json()
