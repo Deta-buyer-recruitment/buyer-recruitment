@@ -297,13 +297,15 @@ async def _build_dashboard(customer_id: str) -> dict:
     progress = round((done + in_prog * 0.5) / total_steps * 100)
 
     # contact_logs 기반 통계
-    contacted_ids = set(log["buyer_id"] for log in all_logs if log.get("attempt_no") == 1)
+    # 총 컨택 수 = contact_logs에 1건이라도 있는 고유 바이어 수
+    contacted_ids = set(log["buyer_id"] for log in all_logs)
+    # 회신 수 = replied == True 인 고유 바이어 수
     replied_ids   = set(log["buyer_id"] for log in all_logs if log.get("replied") is True)
     total_contacted = len(contacted_ids)
     total_replied   = len(replied_ids)
 
-    # Weekly 집계 — contact_date 기반 주별 누적
-    weekly_data = _build_weekly_stats(all_logs)
+    # 차수별(attempt_no) 집계
+    weekly_data = _build_attempt_stats(all_logs)
 
     return {
         "customer": customer,
@@ -312,8 +314,8 @@ async def _build_dashboard(customer_id: str) -> dict:
         "progress": progress,
         "stats": {
             "total_buyers": len(buyers),
-            "contacted": total_contacted or len([b for b in buyers if b["status"] != "pending"]),
-            "replied":   total_replied   or len([b for b in buyers if b["status"] in ("replied","meeting","closed")]),
+            "contacted": total_contacted,
+            "replied":   total_replied,
             "meetings":  len([m for m in meetings if m["status"] == "scheduled"]),
         },
         "weekly_data": weekly_data,
@@ -323,63 +325,74 @@ async def _build_dashboard(customer_id: str) -> dict:
     }
 
 
-def _build_weekly_stats(logs: list) -> list:
-    """contact_logs의 contact_date 기반 주별 누적 통계"""
+def _build_attempt_stats(logs: list) -> list:
+    """attempt_no(차수) 기준 누적 컨택/회신 집계
+    
+    contact_date가 기간(2026.02.09 - 2026.02.23)으로 입력되므로
+    주별 대신 차수별(1차/2차/3차...)로 집계
+    """
     from collections import defaultdict
-    import re
 
     if not logs:
         return []
 
-    # 날짜 파싱 (2026.02.09 - 2026.02.23, 2026-02-09 등 다양한 형식 지원)
-    weekly = defaultdict(lambda: {"contacted": 0, "replied": 0})
+    # attempt_no별로 바이어 집계
+    # contacted: 해당 차수에 컨택된 고유 바이어
+    # replied:   해당 차수에서 replied==True인 고유 바이어
+    attempt_contacted = defaultdict(set)  # attempt_no -> set of buyer_ids
+    attempt_replied   = defaultdict(set)
+    attempt_date      = {}  # attempt_no -> contact_date (라벨용)
 
     for log in logs:
-        date_str = log.get("contact_date", "")
-        if not date_str:
+        attempt = log.get("attempt_no")
+        if not attempt:
             continue
-        # 날짜 범위면 시작 날짜 사용
-        date_str = str(date_str).split("-")[0].split("~")[0].strip()
-        # 숫자만 추출해서 날짜 파싱
-        nums = re.findall(r'\d+', date_str)
-        if len(nums) >= 3:
-            try:
-                year, month, day = int(nums[0]), int(nums[1]), int(nums[2])
-                from datetime import date
-                d = date(year, month, day)
-                # ISO 주 번호로 그룹화
-                week_key = d.strftime("%Y W%V")
-                # 사람이 읽기 좋은 형태로 변환
-                month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-                week_num = int(d.strftime("%V"))
-                week_label = f"{month_names[d.month-1]}. week {((d.day-1)//7)+1}"
+        buyer_id = log.get("buyer_id")
+        attempt_contacted[attempt].add(buyer_id)
+        if log.get("replied") is True:
+            attempt_replied[attempt].add(buyer_id)
+        # 날짜 라벨 저장 (처음 만난 것 사용)
+        if attempt not in attempt_date and log.get("contact_date"):
+            attempt_date[attempt] = log["contact_date"]
 
-                if log.get("attempt_no") == 1:
-                    weekly[week_key]["label"] = week_label
-                    weekly[week_key]["contacted"] += 1
-                if log.get("replied") is True:
-                    weekly[week_key]["label"] = week_label
-                    weekly[week_key]["replied"] += 1
-            except Exception:
-                continue
-
-    if not weekly:
+    if not attempt_contacted:
         return []
 
-    # 시간순 정렬
-    sorted_weeks = sorted(weekly.items())
+    # 차수 오름차순 정렬, 누적 합산
+    sorted_attempts = sorted(attempt_contacted.keys())
     result = []
     cum_contacted = 0
     cum_replied   = 0
-    for week_key, data in sorted_weeks:
-        cum_contacted += data.get("contacted", 0)
-        cum_replied   += data.get("replied",   0)
+
+    for attempt in sorted_attempts:
+        cum_contacted += len(attempt_contacted[attempt])
+        cum_replied   += len(attempt_replied[attempt])
+
+        # 라벨: "1차 (02.09~02.23)" 형식
+        date_label = ""
+        raw_date = attempt_date.get(attempt, "")
+        if raw_date:
+            # 2026.02.09 - 2026.02.23  또는  2026.02.09-2026.02.23 형식에서
+            # 월.일 ~ 월.일 만 추출
+            import re
+            parts = re.split(r'\s*[-~]\s*', raw_date.strip())
+            def fmt(d: str) -> str:
+                nums = re.findall(r'\d+', d)
+                if len(nums) >= 3:
+                    return f"{int(nums[1]):02d}.{int(nums[2]):02d}"
+                return d
+            if len(parts) >= 2:
+                date_label = f" ({fmt(parts[0])}~{fmt(parts[-1])})"
+            elif len(parts) == 1:
+                date_label = f" ({fmt(parts[0])})"
+
         result.append({
-            "week":      data.get("label", week_key),
+            "week":      f"{attempt}차{date_label}",
             "contacted": cum_contacted,
             "replied":   cum_replied,
             "meetings":  0,
         })
+
     return result
 
 
