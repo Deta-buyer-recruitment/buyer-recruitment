@@ -178,7 +178,8 @@ export default function BuyerListPage() {
                       ) : (
                         <div className="flex gap-1">
                           <button onClick={() => startEdit(buyer)}
-                            className="p-1.5 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
+                            className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
+>
                             <Edit2 size={13} />
                           </button>
                           <button onClick={() => setDeleteTarget(buyer)}
