@@ -107,11 +107,11 @@ export default function BuyerListPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>#</th>
+                <th style={{width:"40px"}}>#</th>
                 <th>Company</th>
                 <th>Country</th>
                 <th>Contact</th>
@@ -119,7 +119,7 @@ export default function BuyerListPage() {
                 <th>Website</th>
                 <th>Status</th>
                 <th>Client</th>
-                
+                <th style={{width:"80px"}}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -160,35 +160,32 @@ export default function BuyerListPage() {
                           </select>
                         : <span className="badge text-[11px]" style={{ color: statusM.color, background: statusM.bg }}>{statusM.label}</span>}
                     </td>
-                  <td>
-  <div className="flex items-center justify-between gap-2">
-    <span className="text-xs text-slate-400">{buyer.customers?.name || "—"}</span>
-    {!isEditing && (
-      <div className="flex gap-1">
-        <button onClick={() => startEdit(buyer)}
-          className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
-          <Edit2 size={13} />
-        </button>
-        <button onClick={() => setDeleteTarget(buyer)}
-          className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors border border-red-200">
-          <Trash2 size={13} />
-        </button>
-      </div>
-    )}
-    {isEditing && (
-      <div className="flex gap-1">
-        <button onClick={() => saveEdit(buyer.id)} disabled={saving}
-          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-          <Check size={12} />
-        </button>
-        <button onClick={() => setEditingId(null)}
-          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200">
-          <X size={12} />
-        </button>
-      </div>
-    )}
-  </div>
-</td>
+                    <td className="text-xs text-slate-400">{buyer.customers?.name || "—"}</td>
+                    <td>
+                      {isEditing ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => saveEdit(buyer.id)} disabled={saving}
+                            className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            <Check size={12} />
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1">
+                          <button onClick={() => startEdit(buyer)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors">
+                            <Edit2 size={13} />
+                          </button>
+                          <button onClick={() => setDeleteTarget(buyer)}
+                            className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
@@ -213,9 +210,7 @@ export default function BuyerListPage() {
                 <p className="text-xs text-slate-400 mt-0.5">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-600 mb-1">
-              Are you sure you want to permanently delete:
-            </p>
+            <p className="text-sm text-slate-600 mb-1">Are you sure you want to permanently delete:</p>
             <div className="bg-red-50 rounded-xl px-4 py-3 mb-5">
               <p className="font-semibold text-slate-800 text-sm">{deleteTarget.company}</p>
               <p className="text-xs text-slate-500 mt-0.5">{deleteTarget.country} · {deleteTarget.email || "No email"}</p>
