@@ -37,6 +37,7 @@ export default function ClientPage() {
   const [inquiryOpen, setInquiryOpen]   = useState(false)
   const [inquiryForm, setInquiryForm]   = useState({ author_name: "", title: "", content: "" })
   const [submitting, setSubmitting]     = useState(false)
+  const [exportingLogs, setExportingLogs] = useState(false)  // ← 추가
 
   useEffect(() => {
     const saved = sessionStorage.getItem(STORAGE_KEY(slug))
@@ -92,6 +93,29 @@ export default function ClientPage() {
     setInquiryForm({ author_name: "", title: "", content: "" })
     setSubmitting(false)
     loadData()
+  }
+
+  // ── 컨택 로그 엑셀 다운로드 ──────────────────────────────────
+  const downloadContactLogs = async () => {
+    if (!customerId) return
+    setExportingLogs(true)
+    try {
+      const res = await fetch(`${API}/api/client/contact-logs/${customerId}/export`)
+      if (!res.ok) throw new Error("Export failed")
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      const cname = data?.customer?.name?.replace(/\s+/g, "_") || "client"
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "")
+      a.download = `${cname}_contact_logs_${today}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert("컨택 로그 다운로드에 실패했습니다.")
+    } finally {
+      setExportingLogs(false)
+    }
   }
 
   if (authChecking) return (
@@ -250,13 +274,19 @@ export default function ClientPage() {
               </div>
             )}
 
-            {/* Contact Stats */}
+            {/* Contact Stats — 다운로드 버튼 추가 */}
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-base font-bold text-slate-800">컨택 현황</h2>
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <Clock size={11} /> 매주 금요일 업데이트
-                </span>
+                {/* ★ 컨택 로그 다운로드 버튼 */}
+                <button
+                  onClick={downloadContactLogs}
+                  disabled={exportingLogs}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  {exportingLogs
+                    ? <><div className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin" />다운로드 중...</>
+                    : <><Download size={12} />컨택 로그 다운로드</>}
+                </button>
               </div>
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
@@ -477,14 +507,13 @@ function FileRow({ file, customerId }: { file: any; customerId: string }) {
         setPreviewUrl(url)
         setPreviewType("pdf")
       } else if (isExcel) {
-        // SheetJS로 엑셀 파싱
         const response = await fetch(url)
         const buffer = await response.arrayBuffer()
         const XLSX = await import("xlsx")
         const wb = XLSX.read(buffer, { type: "array" })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
-        setExcelData(rows.slice(0, 30)) // 최대 30행
+        setExcelData(rows.slice(0, 30))
         setPreviewType("excel")
       }
       setPreviewing(true)
@@ -566,4 +595,3 @@ function buildWeeklyData(stats: any, weeklyData?: any[]) {
     meetings:  i < 2 ? 0 : Math.round((stats?.meetings || 0) * (i - 1) / (n - 2)),
   }))
 }
-
