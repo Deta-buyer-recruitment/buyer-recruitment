@@ -383,6 +383,99 @@ def _build_weekly_stats(logs: list) -> list:
     return result
 
 
+# ── 컨택 로그 엑셀 다운로드 ──────────────────────────────────
+
+@router.get("/contact-logs/{customer_id}/export")
+async def export_contact_logs(customer_id: str):
+    """고객사의 컨택 로그를 엑셀로 다운로드"""
+    from fastapi.responses import StreamingResponse
+    import io
+
+    sb = get_supabase()
+
+    # 해당 고객사 바이어 조회
+    buyers = sb.table("buyers").select("id,company,country,contact_name,email").eq(
+        "customer_id", customer_id
+    ).execute().data or []
+
+    buyer_map = {b["id"]: b for b in buyers}
+    buyer_ids = list(buyer_map.keys())
+
+    # 컨택 로그 조회
+    logs = []
+    if buyer_ids:
+        logs = sb.table("contact_logs").select(
+            "buyer_id, attempt_no, contact_date, replied, reply_content, status, notes"
+        ).in_("buyer_id", buyer_ids).order("contact_date").execute().data or []
+
+    # 엑셀 생성
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        raise HTTPException(status_code=500, detail="openpyxl not installed")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Contact Logs"
+
+    # 헤더
+    headers = ["No", "Company", "Country", "Contact Name", "Email",
+               "Attempt", "Contact Date", "Replied", "Reply Content", "Status", "Notes"]
+    header_fill = PatternFill("solid", fgColor="4F46E5")
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # 컬럼 너비
+    col_widths = [6, 28, 15, 20, 30, 10, 15, 10, 40, 15, 30]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    ws.row_dimensions[1].height = 22
+
+    # 데이터
+    for i, log in enumerate(logs, 2):
+        buyer = buyer_map.get(log.get("buyer_id"), {})
+        row_fill = PatternFill("solid", fgColor="F8F7FF") if i % 2 == 0 else PatternFill("solid", fgColor="FFFFFF")
+        row_data = [
+            i - 1,
+            buyer.get("company", ""),
+            buyer.get("country", ""),
+            buyer.get("contact_name", ""),
+            buyer.get("email", ""),
+            log.get("attempt_no", ""),
+            log.get("contact_date", ""),
+            "Y" if log.get("replied") else "N",
+            log.get("reply_content", ""),
+            log.get("status", ""),
+            log.get("notes", ""),
+        ]
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=i, column=col, value=val)
+            cell.fill = row_fill
+            cell.alignment = Alignment(vertical="center", wrap_text=(col == 9))
+
+    # 스트림으로 반환
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    customer = sb.table("customers").select("name").eq("id", customer_id).single().execute().data
+    cname = customer.get("name", "client").replace(" ", "_") if customer else "client"
+    filename = f"{cname}_contact_logs_{datetime.now().strftime('%Y%m%d')}.xlsx"
+
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.get("/dashboard/slug/{slug}")
 async def dashboard_by_slug(slug: str):
     """slug 기반 — 반드시 /dashboard/{customer_id} 보다 먼저 선언해야 함"""
