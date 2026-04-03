@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import AppLayout from "@/components/layout/AppLayout"
 import { toast } from "sonner"
-import { Shield, Eye, Edit3, Plus, Key, X, Send, Lock, ChevronDown, ChevronUp, Briefcase } from "lucide-react"
+import { Shield, Eye, Edit3, Plus, Key, X, Send, Lock, ChevronDown, ChevronUp, Briefcase, Check, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
@@ -18,16 +18,21 @@ export default function SettingsPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [gmailStatus, setGmailStatus] = useState<any>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editRole, setEditRole]   = useState("")
+
+  // 멤버 편집 (역할 + 이름 통합)
+  const [editingId, setEditingId]     = useState<string | null>(null)
+  const [editRole, setEditRole]       = useState("")
+  const [editName, setEditName]       = useState("")
+  const [editSaving, setEditSaving]   = useState(false)
 
   // 초대 폼
   const [inviteOpen, setInviteOpen]   = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteName, setInviteName]   = useState("")   // ← 이름 추가
   const [inviteRole, setInviteRole]   = useState("viewer")
   const [inviting, setInviting]       = useState(false)
 
-  // 고객사 접근 설정 (기존 고객사 선택 → ID/비번만)
+  // 고객사 접근 설정
   const [accessOpen, setAccessOpen]     = useState<string | null>(null)
   const [accessId, setAccessId]         = useState("")
   const [accessPw, setAccessPw]         = useState("")
@@ -47,16 +52,25 @@ export default function SettingsPage() {
 
   useEffect(() => { loadData() }, [])
 
-  const saveRole = async (userId: string) => {
+  const startEdit = (p: any) => {
+    setEditingId(p.id)
+    setEditRole(p.role)
+    setEditName(p.full_name || "")
+  }
+
+  const saveEdit = async (userId: string) => {
+    setEditSaving(true)
     try {
       await fetch(`${API}/api/client/profiles/${userId}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: editRole })
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: editRole, full_name: editName || null })
       })
-      toast.success("Role updated")
+      toast.success("Updated successfully")
       setEditingId(null)
       loadData()
-    } catch { toast.error("Failed to update role") }
+    } catch { toast.error("Failed to update") }
+    finally { setEditSaving(false) }
   }
 
   const inviteUser = async () => {
@@ -65,12 +79,12 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${API}/api/client/invite`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole })
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole, full_name: inviteName || null })
       })
       const data = await res.json()
       if (data.success) {
         toast.success(`Invitation sent to ${inviteEmail}`)
-        setInviteOpen(false); setInviteEmail(""); setInviteRole("viewer")
+        setInviteOpen(false); setInviteEmail(""); setInviteName(""); setInviteRole("viewer")
         loadData()
       } else {
         toast.error(data.error || "Failed to send invitation")
@@ -148,48 +162,66 @@ export default function SettingsPage() {
             {profiles.map(p => {
               const meta = ROLE_META[p.role as keyof typeof ROLE_META]
               const isEditing = editingId === p.id
+              const initials = (p.full_name || p.email || "?")[0].toUpperCase()
               return (
-                <div key={p.id} className="px-6 py-4 flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-indigo-600">
-                      {(p.full_name || p.email || "?")[0].toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{p.full_name || "No name"}</p>
-                    <p className="text-xs text-slate-400 truncate">{p.email}</p>
-                  </div>
-                  {isEditing ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <select value={editRole} onChange={e => setEditRole(e.target.value)}
-                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
-                        <option value="editor">Editor</option>
-                        <option value="manager">Manager</option>
-                        <option value="viewer">Viewer</option>
-                      </select>
-                      <button onClick={() => saveRole(p.id)}
-                        className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-700">
-                        Save
-                      </button>
-                      <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-slate-600 p-1">
-                        <X size={14} />
-                      </button>
+                <div key={p.id} className="px-6 py-4">
+                  <div className="flex items-center gap-4">
+                    {/* 아바타 */}
+                    <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-indigo-600">{initials}</span>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-3 shrink-0">
-                      {meta && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                          style={{ color: meta.color, background: meta.bg }}>
-                          {meta.label}
-                        </span>
+
+                    {/* 이름/이메일 — 편집 모드 */}
+                    <div className="flex-1 min-w-0">
+                      {isEditing ? (
+                        <input
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          placeholder="이름 입력"
+                          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-0.5"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-slate-800 truncate">
+                          {p.full_name || <span className="text-slate-400 italic">이름 없음</span>}
+                        </p>
                       )}
-                      <button
-                        onClick={() => { setEditingId(p.id); setEditRole(p.role) }}
-                        className="text-xs text-slate-400 hover:text-indigo-600 transition-colors">
-                        Change
-                      </button>
+                      <p className="text-xs text-slate-400 truncate">{p.email}</p>
                     </div>
-                  )}
+
+                    {/* 역할 + 액션 */}
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                          className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                          <option value="editor">Editor</option>
+                          <option value="manager">Manager</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <button onClick={() => saveEdit(p.id)} disabled={editSaving}
+                          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                          <Check size={13} />
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 shrink-0">
+                        {meta && (
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                            style={{ color: meta.color, background: meta.bg }}>
+                            {meta.label}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => startEdit(p)}
+                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300">
+                          <Edit3 size={11} /> Edit
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -218,7 +250,6 @@ export default function SettingsPage() {
               const isOpen = accessOpen === c.id
               return (
                 <div key={c.id}>
-                  {/* 고객사 행 */}
                   <div className="px-6 py-4 flex items-center gap-4">
                     <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
                       <span className="text-sm font-bold text-slate-600">{c.name[0]}</span>
@@ -249,8 +280,6 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </div>
-
-                  {/* ID/비번 설정 폼 */}
                   {isOpen && (
                     <div className="px-6 pb-5 pt-1 bg-slate-50 border-t border-slate-100">
                       <p className="text-xs text-slate-500 mb-3">
@@ -259,26 +288,17 @@ export default function SettingsPage() {
                       <div className="flex items-end gap-3">
                         <div>
                           <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Login ID</label>
-                          <input
-                            value={accessId}
-                            onChange={e => setAccessId(e.target.value)}
+                          <input value={accessId} onChange={e => setAccessId(e.target.value)}
                             placeholder="e.g. sammi2024"
-                            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-40 bg-white"
-                          />
+                            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-40 bg-white" />
                         </div>
                         <div>
                           <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Password</label>
-                          <input
-                            value={accessPw}
-                            onChange={e => setAccessPw(e.target.value)}
-                            type="password"
-                            placeholder="Set password"
-                            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-40 bg-white"
-                          />
+                          <input value={accessPw} onChange={e => setAccessPw(e.target.value)}
+                            type="password" placeholder="Set password"
+                            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-40 bg-white" />
                         </div>
-                        <button
-                          onClick={() => saveAccess(c.id)}
-                          disabled={!accessId || !accessPw || accessSaving}
+                        <button onClick={() => saveAccess(c.id)} disabled={!accessId || !accessPw || accessSaving}
                           className="bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-colors">
                           {accessSaving ? "Saving..." : "Save"}
                         </button>
@@ -339,6 +359,18 @@ export default function SettingsPage() {
               </button>
             </div>
             <div className="space-y-3">
+              {/* 이름 입력 추가 */}
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                  Name <span className="text-slate-300">(optional)</span>
+                </label>
+                <div className="relative">
+                  <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                    placeholder="홍길동"
+                    className="w-full border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+              </div>
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1.5 block">Email *</label>
                 <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
@@ -361,7 +393,7 @@ export default function SettingsPage() {
                   : <><Send size={14} />Send Invitation</>}
               </button>
               <p className="text-[11px] text-slate-400 text-center">
-                Invitation email will be sent via Supabase Auth
+                초대받은 사람은 이메일 링크 클릭 후 비밀번호를 설정하게 됩니다
               </p>
             </div>
           </div>

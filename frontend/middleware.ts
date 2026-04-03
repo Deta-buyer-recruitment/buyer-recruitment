@@ -24,8 +24,12 @@ export async function middleware(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const { pathname } = req.nextUrl
 
-  // 로그인/고객 페이지는 인증 불필요
-  if (pathname.startsWith("/login") || pathname.startsWith("/client")) {
+  // 로그인 / 고객 페이지 / 비밀번호 설정 페이지는 인증 불필요
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/client") ||
+    pathname.startsWith("/set-password")
+  ) {
     if (pathname === "/login" && session) {
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
