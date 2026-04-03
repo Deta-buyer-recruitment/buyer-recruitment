@@ -581,6 +581,7 @@ class InvitePayload(BaseModel):
     email: str
     role: str = "viewer"
     customer_id: Optional[str] = None
+    full_name: Optional[str] = None
 
 
 @router.post("/invite")
@@ -588,6 +589,7 @@ async def invite_user(payload: InvitePayload):
     import httpx
     supabase_url = os.getenv("SUPABASE_URL", "")
     service_key  = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    redirect_to  = "https://deta.ai.kr/set-password"
     try:
         resp = httpx.post(
             f"{supabase_url}/auth/v1/invite",
@@ -596,7 +598,10 @@ async def invite_user(payload: InvitePayload):
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             },
-            json={"email": payload.email,"redirect_to": "https://deta.ai.kr/set-password" },
+            json={
+                "email": payload.email,
+                "redirect_to": redirect_to,
+            },
             timeout=15,
         )
         data = resp.json()
@@ -608,6 +613,7 @@ async def invite_user(payload: InvitePayload):
                 "email": payload.email,
                 "role": payload.role,
                 "customer_id": payload.customer_id or None,
+                "full_name": payload.full_name or None,
             }).execute()
             return {"success": True, "message": f"Invitation sent to {payload.email}"}
         else:
