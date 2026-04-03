@@ -7,24 +7,42 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
+import { useEffect, useState } from "react"
 
 const NAV = [
   { href: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },
   { href: "/campaigns",  icon: Zap,              label: "Projects" },
   { href: "/buyers",     icon: Users,            label: "Buyer List" },
   { href: "/contacts",   icon: BookOpen,         label: "Contact Log" },
-  { href: "/settings",   icon: Settings,         label: "Settings" },
+  { href: "/settings",   icon: Settings,         label: "Settings",  editorOnly: true },
 ]
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
 export default function Sidebar() {
   const path = usePathname()
   const router = useRouter()
+  const [role, setRole] = useState<string | null>(null)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      const userId = data.session?.user?.id
+      if (!userId) return
+      try {
+        const res = await fetch(`${API}/api/client/profiles`)
+        const profiles = await res.json()
+        const me = profiles.find((p: any) => p.id === userId)
+        if (me) setRole(me.role)
+      } catch {}
+    })
+  }, [])
 
   const handleLogout = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
     await supabase.auth.signOut()
     router.push("/login")
   }
@@ -48,7 +66,9 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ href, icon: Icon, label }) => {
+        {NAV.map(({ href, icon: Icon, label, editorOnly }) => {
+          // editor 전용 탭은 role이 editor일 때만 표시
+          if (editorOnly && role !== "editor") return null
           const active = path.startsWith(href)
           return (
             <Link key={href} href={href}

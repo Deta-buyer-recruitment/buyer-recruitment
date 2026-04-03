@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react"
 import AppLayout from "@/components/layout/AppLayout"
 import { toast } from "sonner"
-import { Shield, Eye, Edit3, Plus, Key, X, Send, Lock, ChevronDown, ChevronUp, Briefcase, Check, User } from "lucide-react"
+import { Shield, Eye, Edit3, Plus, Key, X, Send, Lock, ChevronDown, ChevronUp, Briefcase, Check, User, ShieldOff, Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createBrowserClient } from "@supabase/ssr"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
@@ -18,6 +19,7 @@ export default function SettingsPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [gmailStatus, setGmailStatus] = useState<any>(null)
+  const [myRole, setMyRole]       = useState<string | null>(null)
 
   // 멤버 편집 (역할 + 이름 통합)
   const [editingId, setEditingId]     = useState<string | null>(null)
@@ -28,7 +30,7 @@ export default function SettingsPage() {
   // 초대 폼
   const [inviteOpen, setInviteOpen]   = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteName, setInviteName]   = useState("")   // ← 이름 추가
+  const [inviteName, setInviteName]   = useState("")
   const [inviteRole, setInviteRole]   = useState("viewer")
   const [inviting, setInviting]       = useState(false)
 
@@ -38,15 +40,30 @@ export default function SettingsPage() {
   const [accessPw, setAccessPw]         = useState("")
   const [accessSaving, setAccessSaving] = useState(false)
 
-  const loadData = () => {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const loadData = async () => {
+    // 현재 로그인 유저 role 확인
+    const { data: { session } } = await supabase.auth.getSession()
+    const userId = session?.user?.id
+
     Promise.all([
       fetch(`${API}/api/client/profiles`).then(r => r.json()).catch(() => []),
       fetch(`${API}/api/client/customers`).then(r => r.json()).catch(() => []),
       fetch(`${API}/api/agent/gmail/status`).then(r => r.json()).catch(() => ({})),
     ]).then(([p, c, g]) => {
-      setProfiles(Array.isArray(p) ? p : [])
+      const profileList = Array.isArray(p) ? p : []
+      setProfiles(profileList)
       setCustomers(Array.isArray(c) ? c : [])
       setGmailStatus(g)
+      // 내 role 세팅
+      if (userId) {
+        const me = profileList.find((pr: any) => pr.id === userId)
+        setMyRole(me?.role || null)
+      }
     }).finally(() => setLoading(false))
   }
 
@@ -112,6 +129,29 @@ export default function SettingsPage() {
     <AppLayout>
       <div className="flex items-center justify-center h-screen">
         <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    </AppLayout>
+  )
+
+  // editor가 아니면 Access Denied
+  if (myRole !== "editor") return (
+    <AppLayout>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <ShieldOff size={28} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Access Denied</h2>
+          <p className="text-sm text-slate-500 mb-5 leading-relaxed">
+            You don't have permission to access this page.<br />
+            Please contact the Development Manager for access.
+          </p>
+          <a href="mailto:hunki.kim@industryarc.com"
+            className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+            <Mail size={14} />
+            hunki.kim@industryarc.com
+          </a>
+        </div>
       </div>
     </AppLayout>
   )
