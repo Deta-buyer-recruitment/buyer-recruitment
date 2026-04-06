@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react"
 import AppLayout from "@/components/layout/AppLayout"
 import { api } from "@/lib/api"
-import { STATUS_META, CAMPAIGN_STATUS_META } from "@/lib/utils"
+import { CAMPAIGN_STATUS_META } from "@/lib/utils"
 import {
   Users, TrendingUp, Mail, CheckCircle,
-  ArrowRight, Zap, Globe
+  ArrowRight, Zap, Calendar, MessageSquare
 } from "lucide-react"
 import Link from "next/link"
 import {
@@ -13,9 +13,9 @@ import {
 } from "recharts"
 
 export default function DashboardPage() {
-  const [buyers, setBuyers] = useState<any[]>([])
+  const [buyers, setBuyers]     = useState<any[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     Promise.all([api.buyers.list(), api.campaigns.list()])
@@ -23,24 +23,63 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  // ── 통계 계산 (contact_logs 기반) ──────────────────────────
   const total = buyers.length
-  const contacted = buyers.filter(b => b.status !== "pending").length
-  const replied = buyers.filter(b => ["replied", "meeting", "closed"].includes(b.status)).length
+
+  // 모든 contact_logs 평탄화
+  const allLogs = buyers.flatMap((b: any) => (b.contact_logs || []).map((l: any) => ({ ...l, buyer: b })))
+
+  // 컨택 수 = contact_logs가 1개 이상인 바이어 수
+  const contacted = buyers.filter(b => (b.contact_logs || []).length > 0).length
+
+  // 회신 수 = contact_logs 중 replied=true인 바이어 수 (중복 제거)
+  const repliedBuyerIds = new Set(allLogs.filter(l => l.replied === true).map(l => l.buyer_id))
+  const replied = repliedBuyerIds.size
+
   const replyRate = contacted > 0 ? Math.round((replied / contacted) * 100) : 0
 
-  const byCountry = Object.entries(
-    buyers.reduce((acc: Record<string, number>, b) => {
-      acc[b.country] = (acc[b.country] || 0) + 1; return acc
-    }, {})
-  ).sort((a, b) => b[1] - a[1]).slice(0, 8)
-    .map(([country, count]) => ({ country, count }))
+  // ── 이번 주 데이터 ──────────────────────────────────────────
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - now.getDay()) // 이번주 일요일
+  weekStart.setHours(0, 0, 0, 0)
 
-  const byStatus = Object.entries(STATUS_META).map(([k, v]) => ({
-    status: v.label,
-    count: buyers.filter(b => b.status === k).length,
-    color: v.color,
-    bg: v.bg,
-  })).filter(s => s.count > 0)
+  // 이번주 contact_logs
+  const thisWeekLogs = allLogs.filter(l => {
+    if (!l.contact_date) return false
+    const d = new Date(l.contact_date.split(" ")[0].replace(/\./g, "-"))
+    return d >= weekStart
+  })
+
+  const thisWeekContacted = new Set(thisWeekLogs.map(l => l.buyer_id)).size
+  const thisWeekReplied   = thisWeekLogs.filter(l => l.replied === true).length
+
+  // 이번주 요일별 연락 건수
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const weeklyChart = dayNames.map((day, i) => {
+    const dayLogs = thisWeekLogs.filter(l => {
+      const d = new Date(l.contact_date?.split(" ")[0]?.replace(/\./g, "-"))
+      return d.getDay() === i
+    })
+    return {
+      day,
+      contacted: dayLogs.length,
+      replied: dayLogs.filter(l => l.replied === true).length,
+    }
+  })
+
+  // 이번주 회신Y 바이어 리스트
+  const thisWeekRepliedList = thisWeekLogs
+    .filter(l => l.replied === true)
+    .map(l => ({
+      company: l.buyer?.company,
+      country: l.buyer?.country,
+      email: l.buyer?.email,
+      date: l.contact_date,
+      result: l.result,
+      attempt: l.attempt_no,
+    }))
+    .filter((v, i, arr) => arr.findIndex(x => x.company === v.company) === i) // 중복 제거
 
   const recentCampaigns = campaigns.slice(0, 5)
 
@@ -74,10 +113,10 @@ export default function DashboardPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total Buyers",   value: total,       icon: Users,        color: "#4F46E5", bg: "#EEF2FF" },
-            { label: "Contacted",      value: contacted,   icon: Mail,         color: "#2563EB", bg: "#EFF6FF" },
-            { label: "Replied",        value: replied,     icon: CheckCircle,  color: "#059669", bg: "#ECFDF5" },
-            { label: "Reply Rate",     value: `${replyRate}%`, icon: TrendingUp, color: "#F59E0B", bg: "#FFFBEB" },
+            { label: "Total Buyers",  value: total,           icon: Users,        color: "#4F46E5", bg: "#EEF2FF" },
+            { label: "Contacted",     value: contacted,       icon: Mail,         color: "#2563EB", bg: "#EFF6FF" },
+            { label: "Replied",       value: replied,         icon: CheckCircle,  color: "#059669", bg: "#ECFDF5" },
+            { label: "Reply Rate",    value: `${replyRate}%`, icon: TrendingUp,   color: "#F59E0B", bg: "#FFFBEB" },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -92,49 +131,70 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Country Distribution */}
+          {/* 이번주 연락 현황 차트 */}
           <div className="col-span-2 bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Globe size={15} className="text-indigo-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Buyer Distribution by Country</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="text-indigo-500" />
+                <h2 className="text-sm font-semibold text-slate-800">This Week's Outreach</h2>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block" />
+                  Contacted: <span className="font-bold text-slate-700">{thisWeekContacted}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+                  Replied: <span className="font-bold text-slate-700">{thisWeekReplied}</span>
+                </span>
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={byCountry} barSize={28}>
-                <XAxis dataKey="country" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={weeklyChart} barSize={18} barGap={4}>
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={25} />
                 <Tooltip
-                  contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
+                  contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }}
                   cursor={{ fill: "#F1F5F9" }}
                 />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {byCountry.map((_, i) => (
-                    <Cell key={i} fill={`hsl(${235 + i * 18}, 70%, ${55 + i * 3}%)`} />
-                  ))}
-                </Bar>
+                <Bar dataKey="contacted" name="Contacted" fill="#818CF8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="replied"   name="Replied"   fill="#34D399" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Status Breakdown */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-800 mb-4">Status Breakdown</h2>
-            <div className="space-y-2.5">
-              {byStatus.map(({ status, count, color }) => (
-                <div key={status} className="flex items-center gap-3">
-                  <div className="flex-1 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-                    <span className="text-xs text-slate-600">{status}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 rounded-full" style={{
-                      width: `${Math.max(8, (count / total) * 80)}px`,
-                      background: color, opacity: 0.3
-                    }} />
-                    <span className="text-xs font-semibold text-slate-700 w-6 text-right">{count}</span>
-                  </div>
-                </div>
-              ))}
+          {/* 이번주 회신 Y 리스트 */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col">
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare size={15} className="text-emerald-500" />
+              <h2 className="text-sm font-semibold text-slate-800">This Week's Replies</h2>
+              <span className="ml-auto text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                {thisWeekRepliedList.length}
+              </span>
             </div>
+            {thisWeekRepliedList.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-center">
+                <div>
+                  <p className="text-2xl mb-2">📭</p>
+                  <p className="text-xs text-slate-400">No replies this week yet</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2.5 overflow-y-auto flex-1">
+                {thisWeekRepliedList.map((r, i) => (
+                  <div key={i} className="flex items-start gap-2.5 p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      ✓
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{r.company}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{r.country} · #{r.attempt}차</p>
+                      {r.result && <p className="text-[10px] text-emerald-700 mt-0.5 truncate">{r.result}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
