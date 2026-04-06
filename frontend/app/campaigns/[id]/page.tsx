@@ -211,7 +211,7 @@ export default function ProjectDetailPage() {
             <div className="col-span-1 space-y-4">
               {/* Buyer Upload */}
               <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Buyer List</h2>
+                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Buyer List from VOLZA</h2>
                 <p className="text-xs text-slate-400 mb-3">{buyers.length > 0 ? `${buyers.length} buyers loaded` : "No buyers yet"}</p>
                 <label className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer transition-all mb-2",
                   uploadFile ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300")}>
