@@ -297,11 +297,10 @@ async def _build_dashboard(customer_id: str) -> dict:
     progress = round((done + in_prog * 0.5) / total_steps * 100)
 
     # contact_logs 기반 통계
-    # 총 컨택 수 = contact_logs에 1건이라도 있는 고유 바이어 수
-    contacted_ids = set(log["buyer_id"] for log in all_logs)
+    # 총 컨택 수 = contact_logs 전체 건수 (총 시도 횟수)
+    total_contacted = len(all_logs)
     # 회신 수 = replied == True 인 고유 바이어 수
     replied_ids   = set(log["buyer_id"] for log in all_logs if log.get("replied") is True)
-    total_contacted = len(contacted_ids)
     total_replied   = len(replied_ids)
 
     # 차수별(attempt_no) 집계
