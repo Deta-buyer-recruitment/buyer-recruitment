@@ -29,8 +29,8 @@ export default function DashboardPage() {
   // 모든 contact_logs 평탄화
   const allLogs = buyers.flatMap((b: any) => (b.contact_logs || []).map((l: any) => ({ ...l, buyer: b })))
 
-  // 컨택 수 = contact_logs가 1개 이상인 바이어 수
-  const contacted = buyers.filter(b => (b.contact_logs || []).length > 0).length
+  // 컨택 수 = contact_logs 전체 건수 (총 시도 횟수)
+  const contacted = allLogs.length
 
   // 회신 수 = contact_logs 중 replied=true인 바이어 수 (중복 제거)
   const repliedBuyerIds = new Set(allLogs.filter(l => l.replied === true).map(l => l.buyer_id))
