@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
 import { api } from "@/lib/api"
 import { toast } from "sonner"
-import { ArrowLeft, Upload, CheckCircle, Building2 } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle, Building2, Plus, X } from "lucide-react"
 import Link from "next/link"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
@@ -45,27 +45,74 @@ export default function NewProjectPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
 
-  useEffect(() => {
-    // 고객사 목록 로드
-    fetch(`${API}/api/campaigns/`)
+  // 새 고객사 추가 모달
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: "", slug: "" })
+  const [creatingClient, setCreatingClient] = useState(false)
+
+  const loadCustomers = () => {
+    fetch(`${API}/api/client/customers`)
       .then(r => r.json())
-      .then(campaigns => {
-        // campaigns에서 고객사 중복 제거
-        const seen = new Set()
-        const unique: any[] = []
-        campaigns.forEach((c: any) => {
-          if (c.customer_id && !seen.has(c.customer_id)) {
-            seen.add(c.customer_id)
-            unique.push({ id: c.customer_id, name: c.customers?.name || c.campaign_info?.company_name })
-          }
-        })
-        setCustomers(unique)
-        if (unique.length > 0) setSelectedCustomerId(unique[0].id)
+      .then(data => {
+        setCustomers(data)
       })
-      .catch(() => {})
-  }, [])
+      .catch(() => {
+        // fallback: campaigns에서 추출
+        fetch(`${API}/api/campaigns/`)
+          .then(r => r.json())
+          .then(campaigns => {
+            const seen = new Set()
+            const unique: any[] = []
+            campaigns.forEach((c: any) => {
+              if (c.customer_id && !seen.has(c.customer_id)) {
+                seen.add(c.customer_id)
+                unique.push({ id: c.customer_id, name: c.customers?.name || c.campaign_info?.company_name })
+              }
+            })
+            setCustomers(unique)
+          })
+      })
+  }
+
+  useEffect(() => { loadCustomers() }, [])
 
   const set = (key: string, val: string) => setForm(p => ({ ...p, [key]: val }))
+
+  // slug 자동 생성
+  const handleNewClientName = (name: string) => {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+    setNewClientForm({ name, slug })
+  }
+
+  const createNewClient = async () => {
+    if (!newClientForm.name || !newClientForm.slug) {
+      toast.error("Company name and slug are required")
+      return
+    }
+    setCreatingClient(true)
+    try {
+      const res = await fetch(`${API}/api/client/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newClientForm.name,
+          slug: newClientForm.slug,
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(err.detail || "Failed to create client")
+        return
+      }
+      const newClient = await res.json()
+      toast.success(`${newClientForm.name} created!`)
+      setShowNewClient(false)
+      setNewClientForm({ name: "", slug: "" })
+      loadCustomers()
+      setSelectedCustomerId(newClient.id)
+    } catch { toast.error("Connection error") }
+    finally { setCreatingClient(false) }
+  }
 
   const isInfoComplete = ["company_name","target_country","product_description",
     "usp","signature_name","signature_title","signature_phone"].every(k => form[k])
@@ -79,20 +126,15 @@ export default function NewProjectPage() {
         customer_id: selectedCustomerId,
         followup_interval_days: Number(form.followup_interval_days) || 7
       })
-
       if (file) {
         const uploadResult = await api.campaigns.uploadBuyers(camp.id, camp.customer_id, file)
         toast.success(`Project created! ${uploadResult.inserted} buyers uploaded`)
       } else {
-        toast.success("Project created! You can upload buyers from the project page.")
+        toast.success("Project created!")
       }
-
       router.push(`/campaigns/${camp.id}`)
-    } catch (e: any) {
-      toast.error(e.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e: any) { toast.error(e.message) }
+    finally { setLoading(false) }
   }
 
   return (
@@ -131,24 +173,24 @@ export default function NewProjectPage() {
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
                 <Building2 size={12} /> Client Company
               </h2>
-              {customers.length > 0 ? (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Select Client <span className="text-red-400">*</span>
-                  </label>
-                  <select
-                    value={selectedCustomerId}
-                    onChange={e => setSelectedCustomerId(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
-                    <option value="">-- Select client --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Loading clients...</p>
-              )}
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Select Client <span className="text-red-400">*</span>
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedCustomerId}
+                  onChange={e => setSelectedCustomerId(e.target.value)}
+                  className="flex-1 text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                  <option value="">-- Select client --</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button onClick={() => setShowNewClient(true)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl text-sm font-medium hover:bg-indigo-100 transition-colors shrink-0">
+                  <Plus size={14} /> New Client
+                </button>
+              </div>
             </div>
 
             {FIELD_GROUPS.map(group => (
@@ -199,7 +241,6 @@ export default function NewProjectPage() {
                 <span className="font-semibold">Client:</span> {customers.find(c => c.id === selectedCustomerId)?.name}
               </p>
             </div>
-
             <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Upload Buyer List</h2>
               <p className="text-xs text-slate-500 mb-4">
@@ -216,12 +257,7 @@ export default function NewProjectPage() {
                 <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
                   onChange={e => setFile(e.target.files?.[0] || null)} />
               </label>
-              <div className="mt-4 text-xs text-slate-400 space-y-1">
-                <p>✓ Supported columns: company / country / website / email / contact_name / phone</p>
-                <p>✓ Korean column names also supported automatically</p>
-              </div>
             </div>
-
             <div className="flex gap-3">
               <button onClick={() => setStep("info")}
                 className="flex-1 border border-slate-200 text-slate-600 py-3 rounded-xl text-sm font-medium hover:bg-slate-50">
@@ -237,6 +273,54 @@ export default function NewProjectPage() {
           </div>
         )}
       </div>
+
+      {/* 새 고객사 추가 모달 */}
+      {showNewClient && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-slate-800">Add New Client</h3>
+              <button onClick={() => setShowNewClient(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Company Name *</label>
+                <input
+                  value={newClientForm.name}
+                  onChange={e => handleNewClientName(e.target.value)}
+                  placeholder="e.g. Acme Corporation"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                  Slug <span className="text-slate-400 font-normal">(URL용 고유 ID)</span>
+                </label>
+                <input
+                  value={newClientForm.slug}
+                  onChange={e => setNewClientForm(p => ({ ...p, slug: e.target.value }))}
+                  placeholder="e.g. acme"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                {newClientForm.slug && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    대시보드 URL: deta.ai.kr/client/<span className="text-indigo-500 font-medium">{newClientForm.slug}</span>
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={createNewClient}
+                disabled={!newClientForm.name || !newClientForm.slug || creatingClient}
+                className="w-full bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+                {creatingClient
+                  ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Creating...</>
+                  : <><Plus size={14} />Create Client</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
