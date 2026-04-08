@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 class CampaignCreate(BaseModel):
-    customer_id: Optional[str] = ""
+    customer_id: str
     company_name: str
     target_country: str
     product_description: str
@@ -28,13 +28,8 @@ class CampaignCreate(BaseModel):
 @router.post("/")
 async def create_campaign(payload: CampaignCreate):
     sb = get_supabase()
-    # customer_id가 없으면 첫 번째 고객사로 설정
-    customer_id = payload.customer_id
-    if not customer_id:
-        customers = sb.table("customers").select("id").limit(1).execute()
-        customer_id = customers.data[0]["id"] if customers.data else None
     data = {
-        "customer_id": customer_id,
+        "customer_id": payload.customer_id,
         "status": "draft",
         "campaign_info": {
             "company_name": payload.company_name,
@@ -99,25 +94,43 @@ async def upload_buyers(
     col_map = {
         "바이어사명 (Company)": "company",
         "company": "company",
+        "Company": "company",
+        "회사명": "company",
+        "Buyer Name": "company",
         "국가 (Country)": "country",
         "country": "country",
+        "Country": "country",
+        "국가": "country",
         "웹사이트 (Website)": "website",
         "website": "website",
+        "Website": "website",
+        "홈페이지": "website",
         "담당자명 (Contact Name)": "contact_name",
         "name": "contact_name",
         "contact_name": "contact_name",
+        "Contact Name": "contact_name",
+        "바이어 이름": "contact_name",
         "직함 (Position)": "position",
         "position": "position",
+        "Position": "position",
         "이메일": "email",
         "email": "email",
+        "Email": "email",
         "전화번호 (Phone)": "phone",
         "phone": "phone",
+        "Phone": "phone",
+        "연락처": "phone",
         "No.": "no",
         "no": "no",
+        "No": "no",
+        "번호": "no",
+        "Buyer Number": "no",
         "주요 내용 (Summary)": "summary",
         "summary": "summary",
+        "Summary": "summary",
         "비고 (Notes)": "notes",
         "notes": "notes",
+        "Notes": "notes",
     }
     df.rename(columns={c: col_map[c] for c in df.columns if c in col_map}, inplace=True)
 
