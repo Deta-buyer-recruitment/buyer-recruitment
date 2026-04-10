@@ -50,35 +50,47 @@ async def run_full_pipeline(campaign_id: str, should_stop=None) -> AsyncGenerato
         no_website = [b for b in buyers if not b.get("website")]
         yield make_log(f"🔍 STEP 2: 웹사이트 탐색 ({len(no_website)}개 대상)", "step")
         found_websites = 0
+        EXCLUDE_DOMAINS = ["linkedin.com", "bloomberg.com", "crunchbase.com", "facebook.com",
+                           "twitter.com", "instagram.com", "wikipedia.org", "yellowpages.com",
+                           "dnb.com", "kompass.com", "zoominfo.com", "google.com", "anthropic.com"]
         for buyer in no_website:
             if should_stop and should_stop():
                 yield make_log("⏹ Agent 중지됨", "warn")
                 return
-            yield make_log(f"  검색 중: {buyer['company']}", "info")
+            company = buyer["company"]
+            country = buyer.get("country") or ""
+            yield make_log(f"  검색 중: {company}", "info")
             try:
+                query = f'"{company}" "{country}" official website' if country and country != "Unknown" else f'"{company}" official website'
                 response = await anthropic_client.messages.create(
-                    model="claude-sonnet-4-20250514", max_tokens=300,
+                    model="claude-sonnet-4-20250514", max_tokens=500,
                     tools=[{"type": "web_search_20250305", "name": "web_search"}],
                     messages=[{"role": "user", "content":
-                        f'Search for the official company website of "{buyer["company"]}" ({buyer.get("country") or ""}). '
-                        f'Look for their homepage URL. Return ONLY the URL (e.g. https://www.example.com) with no explanation. '
+                        f'Find the official homepage of the company "{company}" from {country}. '
+                        f'Search query: {query}. '
+                        f'Return ONLY the official homepage URL (e.g. https://www.example.com). '
+                        f'Do NOT return LinkedIn, Bloomberg, Wikipedia or directory sites. '
                         f'If not found, return NOT_FOUND.'}]
                 )
                 website = None
                 for block in response.content:
-                    if hasattr(block, "text"):
-                        urls = re.findall(r'https?://[^\s,\)\"\']+', block.text)
-                        if urls:
-                            website = urls[0].rstrip(".,")
+                    if hasattr(block, "text") and "NOT_FOUND" not in block.text:
+                        urls = re.findall(r'https?://[^\s,\)\"\'<>\]]+', block.text)
+                        for url in urls:
+                            url = url.rstrip(".,)/")
+                            domain = url.split("/")[2] if len(url.split("/")) > 2 else ""
+                            if not any(ex in domain for ex in EXCLUDE_DOMAINS) and len(url) > 10:
+                                website = url
+                                break
                 if website:
                     sb.table("buyers").update({"website": website}).eq("id", buyer["id"]).execute()
                     buyer["website"] = website
                     found_websites += 1
-                    yield make_log(f"  ✓ {buyer['company']} → {website}", "success")
+                    yield make_log(f"  ✓ {company} → {website}", "success")
                 else:
-                    yield make_log(f"  ✗ {buyer['company']}: 미탐색", "warn")
+                    yield make_log(f"  ✗ {company}: 미탐색", "warn")
             except Exception as e:
-                yield make_log(f"  ✗ {buyer['company']}: {str(e)}", "error")
+                yield make_log(f"  ✗ {company}: {str(e)}", "error")
             await asyncio.sleep(0.5)
         yield make_log(f"✅ STEP 2 완료: {found_websites}/{len(no_website)}개", "success")
 
@@ -234,37 +246,46 @@ async def run_step_pipeline(campaign_id: str, step: str, should_stop=None):
             yield make_log(f"🔍 웹사이트 탐색 시작 ({len(buyers)}개 바이어)", "step")
             no_website = [b for b in buyers if not b.get("website")]
             found = 0
+            EXCLUDE_DOMAINS = ["linkedin.com", "bloomberg.com", "crunchbase.com", "facebook.com",
+                               "twitter.com", "instagram.com", "wikipedia.org", "yellowpages.com",
+                               "dnb.com", "kompass.com", "zoominfo.com", "google.com", "anthropic.com"]
             for buyer in no_website:
                 if should_stop and should_stop():
                     yield make_log("⏹ Agent 중지됨", "warn")
                     return
-                yield make_log(f"  검색 중: {buyer['company']}", "info")
+                company = buyer["company"]
+                country = buyer.get("country") or ""
+                yield make_log(f"  검색 중: {company}", "info")
                 try:
+                    query = f'"{company}" "{country}" official website' if country and country != "Unknown" else f'"{company}" official website'
                     response = await anthropic_client.messages.create(
-                        model="claude-sonnet-4-20250514", max_tokens=300,
+                        model="claude-sonnet-4-20250514", max_tokens=500,
                         tools=[{"type": "web_search_20250305", "name": "web_search"}],
                         messages=[{"role": "user", "content":
-                            f'Search for the official company website of "{buyer["company"]}" ({buyer.get("country") or ""}). '
-                            f'Look for their homepage URL. Return ONLY the URL (e.g. https://www.example.com) with no explanation. '
+                            f'Find the official homepage of the company "{company}" from {country}. '
+                            f'Search query: {query}. '
+                            f'Return ONLY the official homepage URL (e.g. https://www.example.com). '
+                            f'Do NOT return LinkedIn, Bloomberg, Wikipedia or directory sites. '
                             f'If not found, return NOT_FOUND.'}]
                     )
                     website = None
                     for block in response.content:
                         if hasattr(block, "text") and "NOT_FOUND" not in block.text:
-                            urls = re.findall(r'https?://[^\s,\)\"\'<>]+', block.text)
+                            urls = re.findall(r'https?://[^\s,\)\"\'<>\]]+', block.text)
                             for url in urls:
                                 url = url.rstrip(".,)/")
-                                if len(url) > 10 and "anthropic" not in url and "google" not in url:
+                                domain = url.split("/")[2] if len(url.split("/")) > 2 else ""
+                                if not any(ex in domain for ex in EXCLUDE_DOMAINS) and len(url) > 10:
                                     website = url
                                     break
                     if website:
                         sb.table("buyers").update({"website": website}).eq("id", buyer["id"]).execute()
                         found += 1
-                        yield make_log(f"  ✓ {buyer['company']} → {website}", "success")
+                        yield make_log(f"  ✓ {company} → {website}", "success")
                     else:
-                        yield make_log(f"  ✗ {buyer['company']}: 미탐색", "warn")
+                        yield make_log(f"  ✗ {company}: 미탐색", "warn")
                 except Exception as e:
-                    yield make_log(f"  ✗ {buyer['company']}: {str(e)}", "error")
+                    yield make_log(f"  ✗ {company}: {str(e)}", "error")
                 await asyncio.sleep(0.5)
             yield make_log(f"✅ 웹사이트 탐색 완료: {found}/{len(no_website)}개", "done")
 
