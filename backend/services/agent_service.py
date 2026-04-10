@@ -60,7 +60,9 @@ async def run_full_pipeline(campaign_id: str, should_stop=None) -> AsyncGenerato
                     model="claude-sonnet-4-20250514", max_tokens=300,
                     tools=[{"type": "web_search_20250305", "name": "web_search"}],
                     messages=[{"role": "user", "content":
-                        f'Official website URL of "{buyer["company"]}" in {buyer.get("country") or ""}. Return URL only or NOT_FOUND.'}]
+                        f'Search for the official company website of "{buyer["company"]}" ({buyer.get("country") or ""}). '
+                        f'Look for their homepage URL. Return ONLY the URL (e.g. https://www.example.com) with no explanation. '
+                        f'If not found, return NOT_FOUND.'}]
                 )
                 website = None
                 for block in response.content:
@@ -242,14 +244,19 @@ async def run_step_pipeline(campaign_id: str, step: str, should_stop=None):
                         model="claude-sonnet-4-20250514", max_tokens=300,
                         tools=[{"type": "web_search_20250305", "name": "web_search"}],
                         messages=[{"role": "user", "content":
-                            f'Official website URL of "{buyer["company"]}" in {buyer.get("country") or ""}. Return URL only or NOT_FOUND.'}]
+                            f'Search for the official company website of "{buyer["company"]}" ({buyer.get("country") or ""}). '
+                            f'Look for their homepage URL. Return ONLY the URL (e.g. https://www.example.com) with no explanation. '
+                            f'If not found, return NOT_FOUND.'}]
                     )
                     website = None
                     for block in response.content:
-                        if hasattr(block, "text"):
-                            urls = re.findall(r'https?://[^\s,\)\"\']+', block.text)
-                            if urls:
-                                website = urls[0].rstrip(".,")
+                        if hasattr(block, "text") and "NOT_FOUND" not in block.text:
+                            urls = re.findall(r'https?://[^\s,\)\"\'<>]+', block.text)
+                            for url in urls:
+                                url = url.rstrip(".,)/")
+                                if len(url) > 10 and "anthropic" not in url and "google" not in url:
+                                    website = url
+                                    break
                     if website:
                         sb.table("buyers").update({"website": website}).eq("id", buyer["id"]).execute()
                         found += 1
