@@ -23,7 +23,7 @@ def make_log(message: str, level: str = "info", data: dict = None) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-async def run_full_pipeline(campaign_id: str) -> AsyncGenerator[str, None]:
+async def run_full_pipeline(campaign_id: str, should_stop=None) -> AsyncGenerator[str, None]:
     sb = get_supabase()
     try:
         camp = sb.table("campaigns").select("*, customers(*)").eq("id", campaign_id).single().execute()
@@ -51,13 +51,16 @@ async def run_full_pipeline(campaign_id: str) -> AsyncGenerator[str, None]:
         yield make_log(f"🔍 STEP 2: 웹사이트 탐색 ({len(no_website)}개 대상)", "step")
         found_websites = 0
         for buyer in no_website:
+            if should_stop and should_stop():
+                yield make_log("⏹ Agent 중지됨", "warn")
+                return
             yield make_log(f"  검색 중: {buyer['company']}", "info")
             try:
                 response = await anthropic_client.messages.create(
                     model="claude-sonnet-4-20250514", max_tokens=300,
                     tools=[{"type": "web_search_20250305", "name": "web_search"}],
                     messages=[{"role": "user", "content":
-                        f'Official website URL of "{buyer["company"]}" in {buyer["country"]}. Return URL only or NOT_FOUND.'}]
+                        f'Official website URL of "{buyer["company"]}" in {buyer.get("country") or ""}. Return URL only or NOT_FOUND.'}]
                 )
                 website = None
                 for block in response.content:
@@ -207,7 +210,7 @@ Return JSON:
             pass
 
 
-async def run_step_pipeline(campaign_id: str, step: str):
+async def run_step_pipeline(campaign_id: str, step: str, should_stop=None):
     """단계별 실행 — website | hunter | abm | templates"""
     sb = get_supabase()
     try:
@@ -230,13 +233,16 @@ async def run_step_pipeline(campaign_id: str, step: str):
             no_website = [b for b in buyers if not b.get("website")]
             found = 0
             for buyer in no_website:
+                if should_stop and should_stop():
+                    yield make_log("⏹ Agent 중지됨", "warn")
+                    return
                 yield make_log(f"  검색 중: {buyer['company']}", "info")
                 try:
                     response = await anthropic_client.messages.create(
                         model="claude-sonnet-4-20250514", max_tokens=300,
                         tools=[{"type": "web_search_20250305", "name": "web_search"}],
                         messages=[{"role": "user", "content":
-                            f'Official website URL of "{buyer["company"]}" in {buyer["country"]}. Return URL only or NOT_FOUND.'}]
+                            f'Official website URL of "{buyer["company"]}" in {buyer.get("country") or ""}. Return URL only or NOT_FOUND.'}]
                     )
                     website = None
                     for block in response.content:

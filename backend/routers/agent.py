@@ -11,6 +11,26 @@ from services.supabase_client import get_supabase
 
 router = APIRouter()
 
+# 실행 중인 Agent 중지 플래그
+_stop_flags: dict[str, bool] = {}
+
+
+def is_stopped(campaign_id: str) -> bool:
+    return _stop_flags.get(campaign_id, False)
+
+
+def clear_stop(campaign_id: str):
+    _stop_flags.pop(campaign_id, None)
+
+
+@router.post("/stop/{campaign_id}")
+async def stop_agent(campaign_id: str):
+    """Agent 실행 중지"""
+    _stop_flags[campaign_id] = True
+    sb = get_supabase()
+    sb.table("campaigns").update({"status": "draft"}).eq("id", campaign_id).execute()
+    return {"success": True, "message": "Agent 중지 요청됨"}
+
 
 @router.get("/run/{campaign_id}")
 async def run_agent(campaign_id: str):
@@ -18,9 +38,11 @@ async def run_agent(campaign_id: str):
     Agent 파이프라인 실행 — SSE 스트리밍
     팀원이 버튼 클릭 → 실시간 진행상황을 화면에서 확인
     """
+    clear_stop(campaign_id)
     async def generate():
-        async for event in run_full_pipeline(campaign_id):
+        async for event in run_full_pipeline(campaign_id, lambda: is_stopped(campaign_id)):
             yield event
+        clear_stop(campaign_id)
         yield "data: {\"type\": \"done\"}\n\n"
 
     return StreamingResponse(
@@ -178,8 +200,9 @@ async def run_step(campaign_id: str, step: str):
     """
     from services.agent_service import run_step_pipeline
     from fastapi.responses import StreamingResponse
+    clear_stop(campaign_id)
     return StreamingResponse(
-        run_step_pipeline(campaign_id, step),
+        run_step_pipeline(campaign_id, step, lambda: is_stopped(campaign_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

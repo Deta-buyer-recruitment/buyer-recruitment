@@ -68,6 +68,14 @@ export default function ProjectDetailPage() {
   useEffect(() => { load() }, [id])
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [logs])
 
+  const stopAgent = async () => {
+    try {
+      await fetch(`${API}/api/agent/stop/${id}`, { method: "POST" })
+      setRunning(false)
+      setLogs(prev => [...prev, { message: "⏹ Agent 중지됨", level: "warn", timestamp: new Date().toISOString() }])
+    } catch (e) {}
+  }
+
   const runStep = (stepKey: string) => {
     if (running) return
     setRunning(true)
@@ -253,6 +261,12 @@ export default function ProjectDetailPage() {
                       ? <><div className="w-3.5 h-3.5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" />Running...</>
                       : <><Play size={12} />Run All Steps</>}
                   </button>
+                  {running && (
+                    <button onClick={stopAgent}
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-all mt-2">
+                      ⏹ Stop Agent
+                    </button>
+                  )}
                 </div>
               </div>
 
