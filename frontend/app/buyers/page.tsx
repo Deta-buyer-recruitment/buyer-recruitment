@@ -206,8 +206,12 @@ export default function BuyerListPage() {
                   <th style={{width:"40px"}}>#</th>
                   <th>Company</th>
                   <th>Country</th>
-                  <th>Contact</th>
-                  <th>Email</th>
+                  <th>Contact 1</th>
+                  <th>Email 1</th>
+                  <th>Contact 2</th>
+                  <th>Email 2</th>
+                  <th>Contact 3</th>
+                  <th>Email 3</th>
                   <th>Website</th>
                   <th>Status</th>
                   <th style={{width:"80px"}}>Actions</th>
@@ -225,15 +229,19 @@ export default function BuyerListPage() {
                       <td>
                         {isEditing
                           ? <input value={editData.contact_name} onChange={e => setEditData((p: any) => ({ ...p, contact_name: e.target.value }))}
-                              className="text-xs border border-slate-200 rounded px-2 py-1 w-32 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                              className="text-xs border border-slate-200 rounded px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
                           : <span className="text-xs text-slate-600">{buyer.contact_name || "—"}</span>}
                       </td>
                       <td>
                         {isEditing
                           ? <input value={editData.email} onChange={e => setEditData((p: any) => ({ ...p, email: e.target.value }))}
-                              className="text-xs border border-slate-200 rounded px-2 py-1 w-40 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                              className="text-xs border border-slate-200 rounded px-2 py-1 w-36 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
                           : <span className="text-xs text-slate-500">{buyer.email || "—"}</span>}
                       </td>
+                      <td><span className="text-xs text-slate-600">{buyer.contact_name2 || "—"}</span></td>
+                      <td><span className="text-xs text-slate-500">{buyer.email2 || "—"}</span></td>
+                      <td><span className="text-xs text-slate-600">{buyer.contact_name3 || "—"}</span></td>
+                      <td><span className="text-xs text-slate-500">{buyer.email3 || "—"}</span></td>
                       <td>
                         {buyer.website
                           ? <a href={buyer.website} target="_blank" rel="noreferrer"
@@ -280,7 +288,7 @@ export default function BuyerListPage() {
                   )
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No buyers found</td></tr>
+                  <tr><td colSpan={12} className="text-center py-12 text-slate-400 text-sm">No buyers found</td></tr>
                 )}
               </tbody>
             </table>
