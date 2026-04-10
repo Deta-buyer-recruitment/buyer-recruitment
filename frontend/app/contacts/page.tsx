@@ -103,7 +103,6 @@ export default function ContactLogPage() {
     </AppLayout>
   )
 
-  // STATUS_META에 rejected 추가 (없는 경우)
   const STATUS_WITH_STOP = {
     ...STATUS_META,
     rejected: { label: "Stop Contact", color: "#DC2626", bg: "#FEF2F2" }
