@@ -140,7 +140,7 @@ export default function ContactLogPage() {
 
         {/* Buyer List */}
         <div className="space-y-2">
-          {filtered.flatMap(buyer => {
+          {filtered.map(buyer => {
             const statusM = STATUS_WITH_STOP[buyer.status as keyof typeof STATUS_WITH_STOP] || STATUS_META.pending
             const isOpen = expandedId === buyer.id
             const logs: any[] = buyer.contact_logs || []
@@ -155,83 +155,88 @@ export default function ContactLogPage() {
               { name: buyer.contact_name3, email: buyer.email3, idx: 3 },
             ].filter(c => c.email || c.name)
 
-            // 컨택이 없으면 기본 1개 row
-            const rows = contacts.length > 0 ? contacts : [{ name: null, email: null, idx: 1 }]
+            const displayContacts = contacts.length > 0 ? contacts : [{ name: null, email: null, idx: 1 }]
 
-            return rows.map((contact, ci) => (
-              <div key={`${buyer.id}-${contact.idx}`} className={cn("bg-white rounded-2xl border shadow-sm overflow-hidden",
+            return (
+              <div key={buyer.id} className={cn("bg-white rounded-2xl border shadow-sm overflow-hidden",
                 isStopped ? "border-red-100 bg-red-50/30" : "border-slate-100")}>
-                <div className="w-full flex items-center gap-4 px-5 py-4">
-                  <button onClick={() => setExpandedId(isOpen ? null : buyer.id)}
-                    className="flex items-center gap-4 flex-1 min-w-0 text-left">
-                    <span className="text-xs text-slate-400 font-mono w-8 shrink-0">
-                      {ci === 0 ? (buyer.no || "—") : ""}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("font-semibold text-sm truncate", isStopped ? "text-red-400 line-through" : "text-slate-800")}>
-                          {buyer.company}
-                        </span>
-                        <span className="text-xs text-slate-400">({buyer.country})</span>
-                        {contacts.length > 1 && (
-                          <span className="text-[10px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded-full font-medium">
-                            Contact {contact.idx}
-                          </span>
-                        )}
-                        {ci === 0 && buyer.customers?.name && (
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{buyer.customers.name}</span>
-                        )}
+                {/* 컨택별 ROW */}
+                {displayContacts.map((contact, ci) => (
+                  <div key={`${buyer.id}-${contact.idx}`}
+                    className={cn("flex items-center gap-4 px-5 py-3.5", ci > 0 && "border-t border-slate-50")}>
+                    <button onClick={() => setExpandedId(isOpen ? null : buyer.id)}
+                      className="flex items-center gap-4 flex-1 min-w-0 text-left">
+                      <span className="text-xs text-slate-400 font-mono w-8 shrink-0">
+                        {ci === 0 ? (buyer.no || "—") : ""}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {ci === 0 && (
+                            <span className={cn("font-semibold text-sm truncate", isStopped ? "text-red-400 line-through" : "text-slate-800")}>
+                              {buyer.company}
+                            </span>
+                          )}
+                          {ci === 0 && <span className="text-xs text-slate-400">({buyer.country})</span>}
+                          {displayContacts.length > 1 && (
+                            <span className="text-[10px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                              Contact {contact.idx}
+                            </span>
+                          )}
+                          {ci === 0 && buyer.customers?.name && (
+                            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full shrink-0">{buyer.customers.name}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          {contact.name && <span className="text-xs text-slate-500">{contact.name}</span>}
+                          {contact.email && <span className="text-xs text-slate-400">{contact.email}</span>}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        {contact.name && <span className="text-xs text-slate-500">{contact.name}</span>}
-                        {contact.email && <span className="text-xs text-slate-400">{contact.email}</span>}
-                      </div>
-                    </div>
-                    {ci === 0 && (
-                      <div className="text-right shrink-0">
-                        {lastContact ? (
-                          <div className="text-xs text-slate-500">
-                            <div>#{lastContact.attempt_no} · {lastContact.contact_date || "No date"}</div>
-                            <div className="mt-0.5">
-                              {lastContact.replied === true && <span className="text-emerald-600 font-semibold">Replied ✓</span>}
-                              {lastContact.replied === false && <span className="text-red-400">No reply</span>}
-                              {lastContact.replied === null && <span className="text-slate-300">—</span>}
+                      {ci === 0 && (
+                        <div className="text-right shrink-0">
+                          {lastContact ? (
+                            <div className="text-xs text-slate-500">
+                              <div>#{lastContact.attempt_no} · {lastContact.contact_date || "No date"}</div>
+                              <div className="mt-0.5">
+                                {lastContact.replied === true && <span className="text-emerald-600 font-semibold">Replied ✓</span>}
+                                {lastContact.replied === false && <span className="text-red-400">No reply</span>}
+                                {lastContact.replied === null && <span className="text-slate-300">—</span>}
+                              </div>
                             </div>
-                          </div>
-                        ) : <span className="text-xs text-slate-300">No contact yet</span>}
-                      </div>
+                          ) : <span className="text-xs text-slate-300">No contact yet</span>}
+                        </div>
+                      )}
+                      {ci === 0 && (
+                        <span className="badge text-[11px] shrink-0" style={{ color: statusM.color, background: statusM.bg }}>
+                          {statusM.label}
+                        </span>
+                      )}
+                      {ci === 0 && (
+                        <div className="shrink-0 text-slate-300">{isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
+                      )}
+                    </button>
+
+                    {/* Stop Contact 버튼 - 첫 번째 row에만 */}
+                    {ci === 0 && !isStopped && (
+                      <button onClick={() => setStopTarget(buyer)}
+                        className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-transparent hover:border-red-200 transition-all">
+                        <Ban size={13} /> Stop
+                      </button>
                     )}
-                    {ci === 0 && (
-                      <span className="badge text-[11px] shrink-0" style={{ color: statusM.color, background: statusM.bg }}>
-                        {statusM.label}
+                    {ci === 0 && isStopped && (
+                      <span className="shrink-0 text-xs text-red-400 flex items-center gap-1 px-2.5 py-1.5">
+                        <Ban size={12} /> Stopped
                       </span>
                     )}
-                    <div className="shrink-0 text-slate-300">{isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
-                  </button>
+                  </div>
+                ))}
 
-                  {/* Stop Contact 버튼 - 첫 번째 row에만 */}
-                  {ci === 0 && !isStopped && (
-                    <button onClick={() => setStopTarget(buyer)}
-                      title="Mark as Stop Contact"
-                      className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-transparent hover:border-red-200 transition-all">
-                      <Ban size={13} />
-                      Stop
-                    </button>
-                  )}
-                  {ci === 0 && isStopped && (
-                    <span className="shrink-0 text-xs text-red-400 flex items-center gap-1 px-2.5 py-1.5">
-                      <Ban size={12} /> Stopped
-                    </span>
-                  )}
-                </div>
-                </div>
-
+                {/* 펼쳐지는 컨택 로그 */}
                 {isOpen && (
                   <div className="border-t border-slate-100 px-5 py-4 bg-slate-50">
                     {isStopped && (
                       <div className="mb-3 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
                         <Ban size={14} className="text-red-400" />
-                        <p className="text-xs text-red-600 font-medium">This buyer has requested to stop contact. They will be excluded from future email campaigns.</p>
+                        <p className="text-xs text-red-600 font-medium">This buyer has requested to stop contact.</p>
                       </div>
                     )}
                     <div className="grid grid-cols-1 gap-3">
@@ -283,7 +288,7 @@ export default function ContactLogPage() {
                   </div>
                 )}
               </div>
-            ))
+            )
           })}
           {filtered.length === 0 && (
             <div className="text-center py-16 text-slate-400 bg-white rounded-2xl border border-slate-100">
@@ -307,15 +312,13 @@ export default function ContactLogPage() {
                 <p className="text-xs text-slate-400 mt-0.5">This buyer will be excluded from future emails.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-600 mb-1">
-              Are you sure you want to stop contacting:
-            </p>
+            <p className="text-sm text-slate-600 mb-1">Are you sure you want to stop contacting:</p>
             <div className="bg-orange-50 rounded-xl px-4 py-3 mb-5">
               <p className="font-semibold text-slate-800 text-sm">{stopTarget.company}</p>
               <p className="text-xs text-slate-500 mt-0.5">{stopTarget.country} · {stopTarget.email || "No email"}</p>
             </div>
             <p className="text-xs text-slate-400 mb-4">
-              The buyer's status will be changed to <span className="font-semibold text-red-500">Stop Contact</span> and they will be skipped in all future email campaigns.
+              Status will be changed to <span className="font-semibold text-red-500">Stop Contact</span> and excluded from future campaigns.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setStopTarget(null)}
