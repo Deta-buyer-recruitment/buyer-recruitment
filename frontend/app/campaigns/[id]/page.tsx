@@ -53,6 +53,8 @@ export default function ProjectDetailPage() {
   const [savingInfo, setSavingInfo] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [deleting, setDeleting]     = useState(false)
+  const [timeline, setTimeline]     = useState<any[]>([])
+  const [savingTimeline, setSavingTimeline] = useState(false)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -62,6 +64,12 @@ export default function ProjectDetailPage() {
       setEditForm(c.campaign_info || {})
       const b = await api.buyers.list(c.customer_id)
       setBuyers(b)
+      // 타임라인 로드
+      const tlRes = await fetch(`${API}/api/client/timeline/${c.customer_id}`)
+      if (tlRes.ok) {
+        const tl = await tlRes.json()
+        setTimeline(tl)
+      }
     } finally { setLoading(false) }
   }
 
@@ -125,6 +133,21 @@ export default function ProjectDetailPage() {
       load()
     } catch { }
     finally { setDeleting(false) }
+  }
+
+  const saveTimeline = async (step_no: number, field: string, value: string) => {
+    setSavingTimeline(true)
+    try {
+      const step = timeline.find(t => t.step_no === step_no)
+      if (!step) return
+      const updated = { ...step, [field]: value }
+      await fetch(`${API}/api/client/timeline/${campaign.customer_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step_no, [field]: value })
+      })
+      setTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
+    } catch { } finally { setSavingTimeline(false) }
   }
 
   const saveInfo = async () => {
@@ -361,6 +384,49 @@ export default function ProjectDetailPage() {
                   ))}
                 </div>
               </div>
+
+              {/* 고객 타임라인 설정 */}
+              {timeline.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                  <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Client Timeline Status
+                  </h2>
+                  <div className="space-y-2">
+                    {timeline.map(step => (
+                      <div key={step.step_no} className="flex items-center gap-3">
+                        <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{step.step_name}</span>
+                        <select
+                          value={step.status || "pending"}
+                          onChange={e => saveTimeline(step.step_no, "status", e.target.value)}
+                          className={cn("text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white",
+                            step.status === "done" ? "border-green-300 text-green-700" :
+                            step.status === "in_progress" ? "border-indigo-300 text-indigo-700" :
+                            "border-slate-200 text-slate-500")}>
+                          <option value="pending">대기</option>
+                          <option value="in_progress">진행중</option>
+                          <option value="done">완료</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={step.start_date || ""}
+                          onChange={e => saveTimeline(step.step_no, "start_date", e.target.value)}
+                          placeholder="시작일"
+                          className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                        />
+                        <span className="text-slate-300 text-xs">~</span>
+                        <input
+                          type="text"
+                          value={step.end_date || ""}
+                          onChange={e => saveTimeline(step.step_no, "end_date", e.target.value)}
+                          placeholder="종료일"
+                          className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {savingTimeline && <p className="text-[10px] text-indigo-500 mt-2">저장 중...</p>}
+                </div>
+              )}
 
               {/* Agent Log */}
               {(running || logs.length > 0) && (

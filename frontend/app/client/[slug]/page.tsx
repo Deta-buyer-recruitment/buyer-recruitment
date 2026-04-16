@@ -585,13 +585,17 @@ function FileRow({ file, customerId }: { file: any; customerId: string }) {
 }
 
 function buildWeeklyData(stats: any, weeklyData?: any[]) {
+  // 실제 차수별 데이터가 있으면 사용
   if (weeklyData && weeklyData.length > 0) return weeklyData
-  const weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"]
+  // 없으면 통계 기반 추정
+  const weeks = ["1차", "2차", "3차", "4차", "5차", "6차"]
   const n = weeks.length
+  const totalContacted = stats?.contacted || 0
+  const totalReplied = stats?.replied || 0
   return weeks.map((week, i) => ({
     week,
-    contacted: Math.round((stats?.contacted || 0) * (i + 1) / n),
-    replied:   Math.round((stats?.replied   || 0) * (i + 1) / n),
+    contacted: Math.round(totalContacted * (i + 1) / n),
+    replied:   Math.round(totalReplied * (i + 1) / n),
     meetings:  i < 2 ? 0 : Math.round((stats?.meetings || 0) * (i - 1) / (n - 2)),
   }))
 }
