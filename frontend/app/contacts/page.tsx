@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout"
 import { api } from "@/lib/api"
 import { STATUS_META, CONTACT_METHODS, cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { Search, Download, ChevronDown, ChevronUp, Save, Ban } from "lucide-react"
+import { Search, Download, ChevronDown, ChevronUp, Save, Ban, Mail, MessageSquare } from "lucide-react"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://buyer-recruitment-production.up.railway.app"
 
@@ -135,7 +135,7 @@ export default function ContactLogPage() {
   return (
     <AppLayout>
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Contact Log</h1>
             <p className="text-sm text-slate-500 mt-1">
@@ -151,6 +151,46 @@ export default function ContactLogPage() {
             </button>
           )}
         </div>
+
+        {/* 통계 카드 */}
+        {customerFilter && !loading && (() => {
+          const allLogs = buyers.flatMap((b: any) => b.contact_logs || [])
+          const totalContacts = allLogs.length
+          const repliedBuyers = new Set(allLogs.filter((l: any) => l.replied === true).map((l: any) => l.buyer_id)).size
+          const repliedLogs = allLogs.filter((l: any) => l.replied === true).length
+          const replyRate = totalContacts > 0 ? Math.round((repliedLogs / totalContacts) * 100) : 0
+          return (
+            <div className="grid grid-cols-3 gap-4 mb-5">
+              <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                  <Mail size={16} className="text-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Contact (총 연락수)</p>
+                  <p className="text-2xl font-bold text-slate-900">{totalContacts.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Replied (회신)</p>
+                  <p className="text-2xl font-bold text-slate-900">{repliedBuyers.toLocaleString()}<span className="text-sm text-slate-400 font-normal ml-1">바이어</span></p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                  <span className="text-amber-500 font-bold text-sm">%</span>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Reply Rate</p>
+                  <p className="text-2xl font-bold text-slate-900">{replyRate}%</p>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Filters */}
         <div className="flex gap-3 mb-5">
