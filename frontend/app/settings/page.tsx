@@ -102,12 +102,21 @@ export default function SettingsPage() {
       if (data.success) {
         toast.success(`Invitation sent to ${inviteEmail}`)
         setInviteOpen(false); setInviteEmail(""); setInviteName(""); setInviteRole("viewer")
-        loadData()
+        setTimeout(() => loadData(), 1000)
       } else {
         toast.error(data.error || "Failed to send invitation")
       }
     } catch { toast.error("Connection error") }
     finally { setInviting(false) }
+  }
+
+  const deleteUser = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to remove ${email}?`)) return
+    try {
+      await fetch(`${API}/api/client/profiles/${userId}`, { method: "DELETE" })
+      toast.success(`${email} removed`)
+      loadData()
+    } catch { toast.error("Failed to remove member") }
   }
 
   const saveAccess = async (customerId: string) => {
@@ -258,6 +267,11 @@ export default function SettingsPage() {
                           onClick={() => startEdit(p)}
                           className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300">
                           <Edit3 size={11} /> Edit
+                        </button>
+                        <button
+                          onClick={() => deleteUser(p.id, p.email)}
+                          className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 transition-colors border border-red-200 rounded-lg px-2.5 py-1.5 hover:border-red-300 hover:bg-red-50">
+                          <X size={11} /> Remove
                         </button>
                       </div>
                     )}
