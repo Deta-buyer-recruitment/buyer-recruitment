@@ -9,7 +9,7 @@ import {
   Play, Send, ArrowLeft, RefreshCw, ChevronDown, ChevronUp,
   Upload, Edit2, Save, X, Users, Search, Mail, Brain, FileText,
   MessageSquare, CheckSquare, Square, Image, Paperclip, Bot, User, Zap,
-  Trash2, AlertTriangle
+  Trash2, AlertTriangle, Plus
 } from "lucide-react"
 import Link from "next/link"
 
@@ -59,6 +59,8 @@ export default function ProjectDetailPage() {
   const [addingStep, setAddingStep] = useState(false)
   const [projectFile, setProjectFile] = useState<File | null>(null)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [projectFiles, setProjectFiles] = useState<any[]>([])
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -73,6 +75,12 @@ export default function ProjectDetailPage() {
       if (tlRes.ok) {
         const tl = await tlRes.json()
         setTimeline(tl)
+      }
+      // 업로드 파일 목록 로드
+      const filesRes = await fetch(`${API}/api/client/files/${c.customer_id}`)
+      if (filesRes.ok) {
+        const fl = await filesRes.json()
+        setProjectFiles(fl)
       }
     } finally { setLoading(false) }
   }
@@ -179,11 +187,29 @@ export default function ProjectDetailPage() {
       if (res.ok) {
         toast.success(`${projectFile.name} uploaded!`)
         setProjectFile(null)
+        load()
       } else {
         toast.error("Upload failed")
       }
     } catch { toast.error("Upload error") }
     finally { setUploadingFile(false) }
+  }
+
+  const deleteProjectFile = async (fileId: string, fileName: string) => {
+    if (!confirm(`"${fileName}" 파일을 삭제하시겠습니까?`)) return
+    setDeletingFileId(fileId)
+    try {
+      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/${fileId}`, {
+        method: "DELETE"
+      })
+      if (res.ok) {
+        toast.success("파일이 삭제되었습니다")
+        setProjectFiles(prev => prev.filter(f => f.id !== fileId))
+      } else {
+        toast.error("삭제에 실패했습니다")
+      }
+    } catch { toast.error("삭제 중 오류가 발생했습니다") }
+    finally { setDeletingFileId(null) }
   }
 
   const saveTimeline = async (step_no: number, field: string, value: string) => {
@@ -518,6 +544,38 @@ export default function ProjectDetailPage() {
                   </button>
                 )}
                 <p className="text-[10px] text-slate-400 mt-2">업로드한 파일은 고객 대시보드 Files 섹션에서 확인 가능</p>
+
+                {/* 업로드된 파일 목록 */}
+                {projectFiles.length > 0 && (
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      공유된 파일 ({projectFiles.length})
+                    </p>
+                    <div className="space-y-1.5">
+                      {projectFiles.map(f => (
+                        <div key={f.id} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                          <FileText size={12} className="text-indigo-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {new Date(f.created_at).toLocaleDateString("ko")}
+                              {f.size_bytes ? ` · ${(f.size_bytes / 1024).toFixed(0)} KB` : ""}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => deleteProjectFile(f.id, f.name)}
+                            disabled={deletingFileId === f.id}
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 shrink-0"
+                            title="파일 삭제">
+                            {deletingFileId === f.id
+                              ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                              : <Trash2 size={12} />}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Agent Log */}

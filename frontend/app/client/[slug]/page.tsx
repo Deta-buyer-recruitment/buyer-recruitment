@@ -175,7 +175,9 @@ export default function ClientPage() {
   )
 
   const { customer, timeline, progress, stats, files, meetings, inquiries } = data
-  const countries = Array.from(new Set((data.buyers || []).map((b: any) => b.country).filter(Boolean))) as string[]
+  const countries = (data.target_countries && data.target_countries.length > 0)
+    ? data.target_countries
+    : Array.from(new Set((data.buyers || []).map((b: any) => b.country).filter(Boolean))) as string[]
   const weeklyData = buildWeeklyData(stats, data.weekly_data)
 
   return (

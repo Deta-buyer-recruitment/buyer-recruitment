@@ -278,6 +278,16 @@ async def _build_dashboard(customer_id: str) -> dict:
     meetings  = sb.table("meetings").select("*,buyers(company,country)").eq("customer_id", customer_id).order("meeting_date").execute().data or []
     inquiries = sb.table("inquiries").select("*").eq("customer_id", customer_id).order("created_at", desc=True).execute().data or []
 
+    # campaigns 테이블에서 target_country 수집
+    campaigns_result = sb.table("campaigns").select("target_country").eq(
+        "customer_id", customer_id
+    ).execute().data or []
+    # 중복 제거, None/빈 값 제외
+    target_countries = list(dict.fromkeys(
+        c["target_country"] for c in campaigns_result
+        if c.get("target_country")
+    ))
+
     # contact_logs 전체 조회 (weekly 집계용)
     buyer_ids = [b["id"] for b in buyers]
     all_logs = []
@@ -321,6 +331,7 @@ async def _build_dashboard(customer_id: str) -> dict:
         "files":     files,
         "meetings":  meetings,
         "inquiries": inquiries,
+        "target_countries": target_countries,
     }
 
 
