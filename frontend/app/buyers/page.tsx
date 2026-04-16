@@ -91,7 +91,7 @@ export default function BuyerListPage() {
     if (!clientFilter || filtered.length === 0) return
     setExporting(true)
     try {
-      const res = await fetch(`${API}/api/buyers/export?customer_id=${clientFilter}`)
+      const res = await fetch(`${API}/api/buyers/export/excel?customer_id=${clientFilter}`)
       if (!res.ok) throw new Error("Export failed")
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
