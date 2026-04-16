@@ -55,6 +55,10 @@ export default function ProjectDetailPage() {
   const [deleting, setDeleting]     = useState(false)
   const [timeline, setTimeline]     = useState<any[]>([])
   const [savingTimeline, setSavingTimeline] = useState(false)
+  const [newStepName, setNewStepName] = useState("")
+  const [addingStep, setAddingStep] = useState(false)
+  const [projectFile, setProjectFile] = useState<File | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -133,6 +137,53 @@ export default function ProjectDetailPage() {
       load()
     } catch { }
     finally { setDeleting(false) }
+  }
+
+  const addTimelineStep = async () => {
+    if (!newStepName.trim()) return
+    setAddingStep(true)
+    try {
+      const res = await fetch(`${API}/api/client/timeline/${campaign.customer_id}/add-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step_name: newStepName.trim() })
+      })
+      if (res.ok) {
+        const newStep = await res.json()
+        setTimeline(prev => [...prev, newStep])
+        setNewStepName("")
+      }
+    } catch {} finally { setAddingStep(false) }
+  }
+
+  const deleteTimelineStep = async (step_no: number) => {
+    try {
+      await fetch(`${API}/api/client/timeline/${campaign.customer_id}/step/${step_no}`, {
+        method: "DELETE"
+      })
+      setTimeline(prev => prev.filter(t => t.step_no !== step_no))
+    } catch {}
+  }
+
+  const uploadProjectFile = async () => {
+    if (!projectFile) return
+    setUploadingFile(true)
+    try {
+      const form = new FormData()
+      form.append("file", projectFile)
+      form.append("category", "report")
+      form.append("uploader_id", "admin")
+      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, {
+        method: "POST", body: form
+      })
+      if (res.ok) {
+        toast.success(`${projectFile.name} uploaded!`)
+        setProjectFile(null)
+      } else {
+        toast.error("Upload failed")
+      }
+    } catch { toast.error("Upload error") }
+    finally { setUploadingFile(false) }
   }
 
   const saveTimeline = async (step_no: number, field: string, value: string) => {
@@ -386,47 +437,88 @@ export default function ProjectDetailPage() {
               </div>
 
               {/* 고객 타임라인 설정 */}
-              {timeline.length > 0 && (
-                <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                  <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                    Client Timeline Status
-                  </h2>
-                  <div className="space-y-2">
-                    {timeline.map(step => (
-                      <div key={step.step_no} className="flex items-center gap-3">
-                        <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{step.step_name}</span>
-                        <select
-                          value={step.status || "pending"}
-                          onChange={e => saveTimeline(step.step_no, "status", e.target.value)}
-                          className={cn("text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white",
-                            step.status === "done" ? "border-green-300 text-green-700" :
-                            step.status === "in_progress" ? "border-indigo-300 text-indigo-700" :
-                            "border-slate-200 text-slate-500")}>
-                          <option value="pending">대기</option>
-                          <option value="in_progress">진행중</option>
-                          <option value="done">완료</option>
-                        </select>
-                        <input
-                          type="text"
-                          value={step.start_date || ""}
-                          onChange={e => saveTimeline(step.step_no, "start_date", e.target.value)}
-                          placeholder="시작일"
-                          className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                        />
-                        <span className="text-slate-300 text-xs">~</span>
-                        <input
-                          type="text"
-                          value={step.end_date || ""}
-                          onChange={e => saveTimeline(step.step_no, "end_date", e.target.value)}
-                          placeholder="종료일"
-                          className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  {savingTimeline && <p className="text-[10px] text-indigo-500 mt-2">저장 중...</p>}
+              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
+                  Client Timeline Status
+                  {savingTimeline && <span className="text-[10px] text-indigo-400 font-normal">저장 중...</span>}
+                </h2>
+                <div className="space-y-2 mb-3">
+                  {timeline.map(step => (
+                    <div key={step.step_no} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={step.step_name || ""}
+                        onChange={e => saveTimeline(step.step_no, "step_name", e.target.value)}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                      />
+                      <select
+                        value={step.status || "pending"}
+                        onChange={e => saveTimeline(step.step_no, "status", e.target.value)}
+                        className={cn("text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white",
+                          step.status === "done" ? "border-green-300 text-green-700" :
+                          step.status === "in_progress" ? "border-indigo-300 text-indigo-700" :
+                          "border-slate-200 text-slate-500")}>
+                        <option value="pending">대기</option>
+                        <option value="in_progress">진행중</option>
+                        <option value="done">완료</option>
+                      </select>
+                      <input type="text" value={step.start_date || ""}
+                        onChange={e => saveTimeline(step.step_no, "start_date", e.target.value)}
+                        placeholder="시작일"
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                      <span className="text-slate-300 text-xs">~</span>
+                      <input type="text" value={step.end_date || ""}
+                        onChange={e => saveTimeline(step.step_no, "end_date", e.target.value)}
+                        placeholder="종료일"
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                      {step.step_no > 6 && (
+                        <button onClick={() => deleteTimelineStep(step.step_no)}
+                          className="p-1 text-red-300 hover:text-red-500 rounded hover:bg-red-50 transition-colors">
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+                {/* 단계 추가 */}
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <input
+                    value={newStepName}
+                    onChange={e => setNewStepName(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addTimelineStep()}
+                    placeholder="새 단계 이름 입력..."
+                    className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                  <button onClick={addTimelineStep} disabled={!newStepName.trim() || addingStep}
+                    className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-40 flex items-center gap-1">
+                    <Plus size={11} /> 추가
+                  </button>
+                </div>
+              </div>
+
+              {/* 파일 업로드 (고객 대시보드 공유용) */}
+              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                  Upload Files (고객 공유)
+                </h2>
+                <label className={cn("flex items-center gap-2 border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all",
+                  projectFile ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50")}>
+                  <Upload size={14} className={projectFile ? "text-indigo-500" : "text-slate-400"} />
+                  <span className="text-xs text-slate-600 flex-1 truncate">
+                    {projectFile ? projectFile.name : "PDF 또는 Excel 파일 선택"}
+                  </span>
+                  <input type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden"
+                    onChange={e => setProjectFile(e.target.files?.[0] || null)} />
+                </label>
+                {projectFile && (
+                  <button onClick={uploadProjectFile} disabled={uploadingFile}
+                    className="mt-2 w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                    {uploadingFile
+                      ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />업로드 중...</>
+                      : <><Upload size={12} />고객 대시보드에 공유</>}
+                  </button>
+                )}
+                <p className="text-[10px] text-slate-400 mt-2">업로드한 파일은 고객 대시보드 Files 섹션에서 확인 가능</p>
+              </div>
 
               {/* Agent Log */}
               {(running || logs.length > 0) && (
