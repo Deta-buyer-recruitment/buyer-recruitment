@@ -253,10 +253,11 @@ export default function ContactLogPage() {
                           <div className="text-right shrink-0">
                             {lastContact ? (
                               <div className="text-xs text-slate-500">
-                                <div>#{lastContact.attempt_no} · {lastContact.contact_date || "No date"}</div>
+                                <div>{lastContact.contact_date || "No date"}</div>
                                 <div className="mt-0.5">
-                                  {lastContact.replied === true && <span className="text-emerald-600 font-semibold">Replied ✓</span>}
-                                  {lastContact.replied === false && <span className="text-red-400">No reply</span>}
+                                  {logs.some((l: any) => l.replied === true)
+                                    ? <span className="text-emerald-600 font-semibold">Replied ✓</span>
+                                    : <span className="text-red-400">No reply</span>}
                                 </div>
                               </div>
                             ) : <span className="text-xs text-slate-300">No contact yet</span>}
