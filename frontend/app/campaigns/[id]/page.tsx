@@ -108,7 +108,7 @@ export default function ProjectDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
-  useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [logs])
+  
 
   const stopAgent = async () => {
     try {
