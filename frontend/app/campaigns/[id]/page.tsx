@@ -183,7 +183,7 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ step_name: newStepName.trim() })
       })
-      if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setNewStepName("") }
+      if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setLocalTimeline(prev => [...prev, newStep]); setNewStepName("") }
     } catch {} finally { setAddingStep(false) }
   }
 
@@ -244,6 +244,7 @@ export default function ProjectDetailPage() {
 
   // 포커스 이탈 시 API 저장
   const saveTimeline = async (step_no: number, field: string, value: string) => {
+    if (field !== "status" && !value.trim()) return  // 빈 값은 저장 안 함
     setSavingTimeline(true)
     try {
       await fetch(`${API}/api/client/timeline/${campaign.customer_id}`, {
