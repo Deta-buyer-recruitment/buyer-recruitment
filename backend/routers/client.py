@@ -292,10 +292,14 @@ async def _build_dashboard(customer_id: str) -> dict:
     buyer_ids = [b["id"] for b in buyers]
     all_logs = []
     if buyer_ids:
-        logs_result = sb.table("contact_logs").select(
-            "buyer_id, attempt_no, contact_date, replied"
-        ).in_("buyer_id", buyer_ids).limit(10000).execute().data or []
-        all_logs = logs_result
+        # Supabase in_() URL 길이 제한 → 200개씩 청크로 나눠 조회
+        chunk_size = 200
+        for i in range(0, len(buyer_ids), chunk_size):
+            chunk = buyer_ids[i:i + chunk_size]
+            chunk_result = sb.table("contact_logs").select(
+                "buyer_id, attempt_no, contact_date, replied"
+            ).in_("buyer_id", chunk).limit(10000).execute().data or []
+            all_logs.extend(chunk_result)
 
     if not timeline:
         sb.rpc("init_timeline", {"p_customer_id": customer_id}).execute()
@@ -424,12 +428,16 @@ async def export_contact_logs(customer_id: str):
     buyer_map = {b["id"]: b for b in buyers}
     buyer_ids = list(buyer_map.keys())
 
-    # 컨택 로그 조회
+    # 컨택 로그 조회 (200개씩 청크로 나눠 조회 — Supabase in_() URL 제한 대응)
     logs = []
     if buyer_ids:
-        logs = sb.table("contact_logs").select(
-            "buyer_id, attempt_no, contact_date, replied, reply_content, status, notes"
-        ).in_("buyer_id", buyer_ids).order("contact_date").execute().data or []
+        chunk_size = 200
+        for i in range(0, len(buyer_ids), chunk_size):
+            chunk = buyer_ids[i:i + chunk_size]
+            chunk_logs = sb.table("contact_logs").select(
+                "buyer_id, attempt_no, contact_date, replied, reply_content, status, notes"
+            ).in_("buyer_id", chunk).order("contact_date").execute().data or []
+            logs.extend(chunk_logs)
 
     # 엑셀 생성
     try:
