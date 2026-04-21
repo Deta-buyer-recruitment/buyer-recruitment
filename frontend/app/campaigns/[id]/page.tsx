@@ -183,7 +183,7 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ step_name: newStepName.trim() })
       })
-      if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setNewStepName("") }
+    if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setLocalTimeline(prev => [...prev, newStep]); setNewStepName("") }
     } catch {} finally { setAddingStep(false) }
   }
 
