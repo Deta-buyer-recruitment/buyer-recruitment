@@ -81,7 +81,7 @@ export default function ProjectDetailPage() {
   const [savingTimeline, setSavingTimeline] = useState(false)
   const [newStepName, setNewStepName] = useState("")
   const [addingStep, setAddingStep] = useState(false)
-  const [projectFile, setProjectFile] = useState<File | null>(null)
+  const [projectFiles_upload, setProjectFilesUpload] = useState<File[]>([])
   const [uploadingFile, setUploadingFile] = useState(false)
   const [projectFiles, setProjectFiles] = useState<any[]>([])
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
@@ -190,16 +190,26 @@ export default function ProjectDetailPage() {
   }
 
   const uploadProjectFile = async () => {
-    if (!projectFile) return
+    if (projectFiles_upload.length === 0) return
     setUploadingFile(true)
+    let successCount = 0
     try {
-      const form = new FormData()
-      form.append("file", projectFile)
-      form.append("category", "report")
-      form.append("uploader_id", "admin")
-      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, { method: "POST", body: form })
-      if (res.ok) { toast.success(`${projectFile.name} uploaded!`); setProjectFile(null); load() }
-      else toast.error("Upload failed")
+      for (const file of projectFiles_upload) {
+        const form = new FormData()
+        form.append("file", file)
+        form.append("category", "report")
+        form.append("uploader_id", "admin")
+        const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, { method: "POST", body: form })
+        if (res.ok) successCount++
+        else toast.error(`${file.name} 업로드 실패`)
+      }
+      if (successCount > 0) {
+        toast.success(`${successCount}개 파일 업로드 완료!`)
+        setProjectFilesUpload([])
+        // 파일 목록 즉시 갱신
+        const filesRes = await fetch(`${API}/api/client/files/${campaign.customer_id}`)
+        if (filesRes.ok) setProjectFiles(await filesRes.json())
+      }
     } catch { toast.error("Upload error") }
     finally { setUploadingFile(false) }
   }
@@ -579,21 +589,33 @@ export default function ProjectDetailPage() {
               <CollapsibleSection title="Upload Files (고객 공유)">
                 <div className="pt-1">
                   <label className={cn("flex items-center gap-2 border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all",
-                    projectFile ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50")}>
-                    <Upload size={14} className={projectFile ? "text-indigo-500" : "text-slate-400"} />
+                    projectFiles_upload.length > 0 ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50")}>
+                    <Upload size={14} className={projectFiles_upload.length > 0 ? "text-indigo-500" : "text-slate-400"} />
                     <span className="text-xs text-slate-600 flex-1 truncate">
-                      {projectFile ? projectFile.name : "PDF 또는 Excel 파일 선택"}
+                      {projectFiles_upload.length > 0 ? `${projectFiles_upload.length}개 파일 선택됨` : "PDF / Excel 파일 선택 (다중 선택 가능)"}
                     </span>
                     <input type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden"
-                      onChange={e => setProjectFile(e.target.files?.[0] || null)} />
+                      onChange={e => setProjectFilesUpload(Array.from(e.target.files || []))} multiple />
                   </label>
-                  {projectFile && (
-                    <button onClick={uploadProjectFile} disabled={uploadingFile}
-                      className="mt-2 w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                      {uploadingFile
-                        ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />업로드 중...</>
-                        : <><Upload size={12} />고객 대시보드에 공유</>}
-                    </button>
+                  {projectFiles_upload.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {projectFiles_upload.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5">
+                          <FileText size={11} className="text-indigo-400 shrink-0" />
+                          <span className="flex-1 truncate">{f.name}</span>
+                          <button onClick={() => setProjectFilesUpload(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-slate-300 hover:text-red-400 transition-colors">
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ))}
+                      <button onClick={uploadProjectFile} disabled={uploadingFile}
+                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 mt-1">
+                        {uploadingFile
+                          ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />업로드 중...</>
+                          : <><Upload size={12} />고객 대시보드에 공유 ({projectFiles_upload.length}개)</>}
+                      </button>
+                    </div>
                   )}
                   <p className="text-[10px] text-slate-400 mt-2">업로드한 파일은 고객 대시보드 Files 섹션에서 확인 가능</p>
                   {projectFiles.length > 0 && (

@@ -141,9 +141,10 @@ async def upload_file(
     sb = get_supabase()
     contents = await file.read()
     storage_path = f"{customer_id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+    # upsert=True: 같은 경로 파일이 있어도 덮어쓰기
     sb.storage.from_(STORAGE_BUCKET).upload(
         storage_path, contents,
-        {"content-type": file.content_type or "application/octet-stream"}
+        file_options={"content-type": file.content_type or "application/octet-stream", "upsert": "true"}
     )
     result = sb.table("project_files").insert({
         "customer_id": customer_id,
@@ -165,7 +166,9 @@ async def download_file(customer_id: str, file_id: str):
     if not f:
         raise HTTPException(status_code=404, detail="File not found")
     signed = sb.storage.from_(STORAGE_BUCKET).create_signed_url(f["storage_path"], 3600)
-    return {"signed_url": signed["signedURL"], "filename": f["name"]}
+    # Supabase SDK 버전에 따라 키가 다름
+    signed_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url") or ""
+    return {"signed_url": signed_url, "filename": f["name"]}
 
 
 @router.delete("/files/{customer_id}/{file_id}")
@@ -436,7 +439,7 @@ async def export_contact_logs(customer_id: str):
         for i in range(0, len(buyer_ids), chunk_size):
             chunk = buyer_ids[i:i + chunk_size]
             chunk_logs = sb.table("contact_logs").select(
-                "buyer_id, attempt_no, contact_date, replied, reply_content, status, notes"
+                "buyer_id, attempt_no, contact_date, contact_method, replied, result, notes"
             ).in_("buyer_id", chunk).order("contact_date").execute().data or []
             logs.extend(chunk_logs)
 
@@ -453,7 +456,7 @@ async def export_contact_logs(customer_id: str):
 
     # 헤더
     headers = ["No", "Company", "Country", "Contact Name", "Email",
-               "Attempt", "Contact Date", "Replied", "Reply Content", "Status", "Notes"]
+               "Attempt", "Contact Date", "Replied", "Result", "Method", "Notes"]
     header_fill = PatternFill("solid", fgColor="4F46E5")
     header_font = Font(bold=True, color="FFFFFF", size=10)
 
@@ -483,8 +486,8 @@ async def export_contact_logs(customer_id: str):
             log.get("attempt_no", ""),
             log.get("contact_date", ""),
             "Y" if log.get("replied") else "N",
-            log.get("reply_content", ""),
-            log.get("status", ""),
+            log.get("result", ""),
+            log.get("contact_method", ""),
             log.get("notes", ""),
         ]
         for col, val in enumerate(row_data, 1):
