@@ -204,13 +204,36 @@ async def update_templates(campaign_id: str, payload: TemplatesUpdate):
 
 @router.delete("/{campaign_id}")
 async def delete_campaign(campaign_id: str):
-    """프로젝트 삭제 (연관 바이어·컨택로그 포함)"""
+    """프로젝트 삭제 (캠페인 + 고객사 + 바이어 + 컨택로그 전체)"""
     sb = get_supabase()
-    # 연관 contact_logs 삭제
-    buyers = sb.table("buyers").select("id").eq("customer_id",
-        sb.table("campaigns").select("customer_id").eq("id", campaign_id).single().execute().data["customer_id"]
-    ).execute().data or []
-    # 해당 캠페인 바이어만 삭제하도록 campaign_id 기준으로 처리
-    # (buyers는 customer_id 기반이므로 캠페인 자체만 삭제)
+
+    # customer_id 조회
+    camp = sb.table("campaigns").select("customer_id").eq("id", campaign_id).single().execute().data
+    if not camp:
+        raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+    customer_id = camp["customer_id"]
+
+    # 바이어 ID 목록 조회
+    buyers = sb.table("buyers").select("id").eq("customer_id", customer_id).execute().data or []
+    buyer_ids = [b["id"] for b in buyers]
+
+    # contact_logs 삭제
+    if buyer_ids:
+        sb.table("contact_logs").delete().in_("buyer_id", buyer_ids).execute()
+
+    # buyers 삭제
+    sb.table("buyers").delete().eq("customer_id", customer_id).execute()
+
+    # timelines 삭제
+    sb.table("timelines").delete().eq("customer_id", customer_id).execute()
+
+    # project_files 삭제
+    sb.table("project_files").delete().eq("customer_id", customer_id).execute()
+
+    # 캠페인 삭제
     sb.table("campaigns").delete().eq("id", campaign_id).execute()
+
+    # 고객사 삭제 (1:1이므로 customer도 제거 → settings에서 사라짐)
+    sb.table("customers").delete().eq("id", customer_id).execute()
+
     return {"deleted": True}
