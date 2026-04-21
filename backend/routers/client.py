@@ -162,8 +162,9 @@ async def upload_file(
         "name": display_name,
         "category": category,
         "storage_path": storage_path,
-        "size_bytes": len(contents),
-        "uploaded_by": uploader_id,
+        "size_bytes": int(len(contents)),
+        # uploaded_by는 UUID 타입이므로 admin 문자열 대신 None 처리
+        "uploaded_by": None if uploader_id == "admin" else uploader_id,
     }).execute()
     return result.data[0]
 
