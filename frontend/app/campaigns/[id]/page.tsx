@@ -183,7 +183,7 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ step_name: newStepName.trim() })
       })
-      if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setLocalTimeline(prev => [...prev, newStep]); setNewStepName("") }
+      if (res.ok) { const newStep = await res.json(); setTimeline(prev => [...prev, newStep]); setNewStepName("") }
     } catch {} finally { setAddingStep(false) }
   }
 
@@ -237,24 +237,42 @@ export default function ProjectDetailPage() {
     finally { setDeletingFileId(null) }
   }
 
-  // 로컬만 업데이트 (타이핑 중)
+  // 로컬만 업데이트 (편집 중)
   const updateLocal = (step_no: number, field: string, value: string) => {
     setLocalTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
   }
 
-  // 포커스 이탈 시 API 저장
-  const saveTimeline = async (step_no: number, field: string, value: string) => {
-    if (field !== "status" && !value.trim()) return  // 빈 값은 저장 안 함
+  // Save 버튼으로 전체 일괄 저장
+  const saveAllTimeline = async () => {
     setSavingTimeline(true)
     try {
-      await fetch(`${API}/api/client/timeline/${campaign.customer_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step_no, [field]: value })
-      })
-      setTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
-      setLocalTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
-    } catch { } finally { setSavingTimeline(false) }
+      await Promise.all(
+        localTimeline.map(step =>
+          fetch(`${API}/api/client/timeline/${campaign.customer_id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              step_no: step.step_no,
+              step_name: step.step_name,
+              status: step.status,
+              start_date: step.start_date || null,
+              end_date: step.end_date || null,
+            })
+          })
+        )
+      )
+      setTimeline([...localTimeline])
+      toast.success("타임라인 저장 완료!")
+    } catch { toast.error("저장에 실패했습니다") }
+    finally { setSavingTimeline(false) }
+  }
+
+  // 변경사항 감지
+  const timelineChanged = JSON.stringify(timeline) !== JSON.stringify(localTimeline)
+
+  // 하위 호환 (기존 코드에서 saveTimeline 호출 부분용 — 로컬만 반영)
+  const saveTimeline = (step_no: number, field: string, value: string) => {
+    updateLocal(step_no, field, value)
   }
 
   const saveInfo = async () => {
@@ -542,21 +560,26 @@ export default function ProjectDetailPage() {
               {/* Client Timeline — collapsible */}
               <CollapsibleSection
                 title="Client Timeline Status"
-                badge={savingTimeline ? <span className="text-[10px] text-indigo-400 font-normal ml-2">저장 중...</span> : undefined}
+                badge={
+                  timelineChanged
+                    ? <span className="text-[10px] text-amber-500 font-semibold ml-2">● 미저장 변경사항</span>
+                    : savingTimeline
+                      ? <span className="text-[10px] text-indigo-400 font-normal ml-2">저장 중...</span>
+                      : undefined
+                }
               >
                 <div className="space-y-2 mb-3 pt-1">
-                  {timeline.map(step => (
+                  {localTimeline.map(step => (
                     <div key={step.step_no} className="flex items-center gap-2 flex-wrap">
                       <input
                         type="text"
-                        value={localTimeline.find(t => t.step_no === step.step_no)?.step_name ?? step.step_name ?? ""}
+                        value={step.step_name ?? ""}
                         onChange={e => updateLocal(step.step_no, "step_name", e.target.value)}
-                        onBlur={e => saveTimeline(step.step_no, "step_name", e.target.value)}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                       />
                       <select
                         value={step.status || "pending"}
-                        onChange={e => saveTimeline(step.step_no, "status", e.target.value)}
+                        onChange={e => updateLocal(step.step_no, "status", e.target.value)}
                         className={cn("text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white",
                           step.status === "done" ? "border-green-300 text-green-700" :
                           step.status === "in_progress" ? "border-indigo-300 text-indigo-700" :
@@ -565,12 +588,10 @@ export default function ProjectDetailPage() {
                         <option value="in_progress">진행중</option>
                         <option value="done">완료</option>
                       </select>
-                      {/* ① 날짜 input — w-28로 넓혀서 10자리(2026-04-19) 입력 가능 */}
                       <input
                         type="text"
-                        value={localTimeline.find(t => t.step_no === step.step_no)?.start_date ?? step.start_date ?? ""}
+                        value={step.start_date ?? ""}
                         onChange={e => updateLocal(step.step_no, "start_date", e.target.value)}
-                        onBlur={e => saveTimeline(step.step_no, "start_date", e.target.value)}
                         placeholder="시작일"
                         maxLength={10}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
@@ -578,9 +599,8 @@ export default function ProjectDetailPage() {
                       <span className="text-slate-300 text-xs">~</span>
                       <input
                         type="text"
-                        value={localTimeline.find(t => t.step_no === step.step_no)?.end_date ?? step.end_date ?? ""}
+                        value={step.end_date ?? ""}
                         onChange={e => updateLocal(step.step_no, "end_date", e.target.value)}
-                        onBlur={e => saveTimeline(step.step_no, "end_date", e.target.value)}
                         placeholder="종료일"
                         maxLength={10}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
@@ -594,6 +614,15 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+                {/* 저장 버튼 — 변경사항 있을 때만 활성화 */}
+                {timelineChanged && (
+                  <div className="flex justify-end mb-2">
+                    <button onClick={saveAllTimeline} disabled={savingTimeline}
+                      className="flex items-center gap-1.5 text-xs bg-indigo-600 text-white px-4 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-40 font-semibold">
+                      <Save size={11} /> {savingTimeline ? "저장 중..." : "저장"}
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                   <input
                     value={newStepName}
