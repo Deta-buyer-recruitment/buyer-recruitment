@@ -41,7 +41,7 @@ export default function ProjectsPage() {
     setCampaigns(list)
 
     // 각 캠페인의 customer_id로 타임라인 병렬 조회
-    const customerIds = [...new Set(list.map((c: any) => c.customer_id).filter(Boolean))]
+    const customerIds = Array.from(new Set(list.map((c: any) => c.customer_id).filter(Boolean)))
     const results = await Promise.allSettled(
       customerIds.map(async (cid: any) => {
         const res = await fetch(`${API}/api/client/timeline/${cid}`)
