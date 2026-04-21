@@ -430,21 +430,25 @@ def _build_attempt_stats(logs: list) -> list:
 
 @router.get("/contact-logs/{customer_id}/export")
 async def export_contact_logs(customer_id: str):
-    """고객사의 컨택 로그를 엑셀로 다운로드"""
+    """고객사의 컨택 로그를 관리자 대시보드와 동일한 형식으로 엑셀 다운로드"""
     from fastapi.responses import StreamingResponse
     import io
 
     sb = get_supabase()
 
-    # 해당 고객사 바이어 조회
-    buyers = sb.table("buyers").select("id,company,country,contact_name,email").eq(
-        "customer_id", customer_id
-    ).execute().data or []
+    # 고객사명
+    customer = sb.table("customers").select("name").eq("id", customer_id).single().execute().data
+    cname = customer.get("name", "client") if customer else "client"
+
+    # 바이어 조회
+    buyers = sb.table("buyers").select(
+        "id, no, company, country, website, contact_name, position, email, phone"
+    ).eq("customer_id", customer_id).order("no").execute().data or []
 
     buyer_map = {b["id"]: b for b in buyers}
     buyer_ids = list(buyer_map.keys())
 
-    # 컨택 로그 조회 (200개씩 청크로 나눠 조회 — Supabase in_() URL 제한 대응)
+    # 컨택 로그 조회 (200개씩 청크)
     logs = []
     if buyer_ids:
         chunk_size = 200
@@ -455,72 +459,154 @@ async def export_contact_logs(customer_id: str):
             ).in_("buyer_id", chunk).order("contact_date").execute().data or []
             logs.extend(chunk_logs)
 
+    # 바이어별 차수별 로그 매핑 {buyer_id: {1: log, 2: log, ...}}
+    buyer_logs: dict = {}
+    for log in logs:
+        bid = log["buyer_id"]
+        attempt = log.get("attempt_no", 1) or 1
+        if bid not in buyer_logs:
+            buyer_logs[bid] = {}
+        buyer_logs[bid][attempt] = log
+
+    # 최대 차수 계산 (최소 10차)
+    max_attempt = 10
+    for b_logs in buyer_logs.values():
+        if b_logs:
+            max_attempt = max(max_attempt, max(b_logs.keys()))
+
     # 엑셀 생성
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     except ImportError:
         raise HTTPException(status_code=500, detail="openpyxl not installed")
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Contact Logs"
+    ws.title = "Buyer_List & LOG"
 
-    # 헤더
-    headers = ["No", "Company", "Country", "Contact Name", "Email",
-               "Attempt", "Contact Date", "Replied", "Result", "Method"]
-    header_fill = PatternFill("solid", fgColor="4F46E5")
-    header_font = Font(bold=True, color="FFFFFF", size=10)
+    # 스타일 정의
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(bold=True, color="FFFFFF", size=9)
+    sub_header_fill = PatternFill("solid", fgColor="2E75B6")
+    sub_header_font = Font(bold=True, color="FFFFFF", size=9)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    thin = Side(style="thin", color="CCCCCC")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+    def even_fill(row_idx):
+        return PatternFill("solid", fgColor="EEF4FF") if row_idx % 2 == 0 else PatternFill("solid", fgColor="FFFFFF")
 
-    # 컬럼 너비
-    col_widths = [6, 28, 15, 20, 30, 10, 15, 10, 40, 15]
-    for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+    # ── 헤더 구성 ──
+    # 기본 정보 컬럼 (11개)
+    base_headers = [
+        ("고객사명", 12),
+        ("No.", 6),
+        ("바이어사명 (Company)", 28),
+        ("국가 (Country)", 14),
+        ("웹사이트 (Website)", 30),
+        ("담당자명 (Contact Name)", 18),
+        ("직함 (Position)", 18),
+        ("이메일", 28),
+        ("전화번호 (Phone)", 16),
+        ("주요 내용 (Summary)", 20),
+        ("비고 (Notes)", 16),
+    ]
+    # 차수별 컬럼 (각 4개: 일자, 연락방법, 회신여부, 연락결과)
+    attempt_col_width = [14, 14, 14, 22]
 
-    ws.row_dimensions[1].height = 22
+    # 헤더 행 작성
+    ws.row_dimensions[1].height = 30
+    col = 1
+    for h, w in base_headers:
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = center
+        c.border = border
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = w
+        col += 1
 
-    # 데이터
-    for i, log in enumerate(logs, 2):
-        buyer = buyer_map.get(log.get("buyer_id"), {})
-        row_fill = PatternFill("solid", fgColor="F8F7FF") if i % 2 == 0 else PatternFill("solid", fgColor="FFFFFF")
+    for attempt in range(1, max_attempt + 1):
+        sub_labels = [
+            f"{attempt}차 연락 일자",
+            "연락방법",
+            "회신/응답 여부 (Y/N)",
+            "연락 결과",
+        ]
+        for i, (label, w) in enumerate(zip(sub_labels, attempt_col_width)):
+            c = ws.cell(row=1, column=col, value=label)
+            c.fill = sub_header_fill if attempt % 2 == 0 else header_fill
+            c.font = header_font
+            c.alignment = center
+            c.border = border
+            ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = w
+            col += 1
+
+    # 데이터 행 작성
+    for row_idx, buyer in enumerate(buyers, 2):
+        ws.row_dimensions[row_idx].height = 18
+        fill = even_fill(row_idx)
+
         row_data = [
-            i - 1,
+            cname,
+            buyer.get("no", row_idx - 1),
             buyer.get("company", ""),
             buyer.get("country", ""),
+            buyer.get("website", ""),
             buyer.get("contact_name", ""),
+            buyer.get("position", ""),
             buyer.get("email", ""),
-            log.get("attempt_no", ""),
-            log.get("contact_date", ""),
-            "Y" if log.get("replied") else "N",
-            log.get("result", ""),
-            log.get("contact_method", ""),
+            buyer.get("phone", ""),
+            "",  # Summary
+            "",  # Notes
         ]
-        for col, val in enumerate(row_data, 1):
-            cell = ws.cell(row=i, column=col, value=val)
-            cell.fill = row_fill
-            cell.alignment = Alignment(vertical="center", wrap_text=(col == 9))
 
-    # 스트림으로 반환
+        col = 1
+        for val in row_data:
+            c = ws.cell(row=row_idx, column=col, value=val)
+            c.fill = fill
+            c.alignment = left
+            c.border = border
+            col += 1
+
+        # 차수별 컨택 로그
+        b_logs = buyer_logs.get(buyer["id"], {})
+        for attempt in range(1, max_attempt + 1):
+            log = b_logs.get(attempt)
+            if log:
+                vals = [
+                    log.get("contact_date", ""),
+                    log.get("contact_method", ""),
+                    "Y" if log.get("replied") else "N",
+                    log.get("result", "") or "",
+                ]
+            else:
+                vals = ["", "", "", ""]
+
+            for val in vals:
+                c = ws.cell(row=row_idx, column=col, value=val)
+                c.fill = fill
+                c.alignment = center
+                c.border = border
+                col += 1
+
+    # 틀 고정 (헤더 고정)
+    ws.freeze_panes = "A2"
+
+    # 스트림 반환
     stream = io.BytesIO()
     wb.save(stream)
     stream.seek(0)
 
-    customer = sb.table("customers").select("name").eq("id", customer_id).single().execute().data
-    cname = customer.get("name", "client").replace(" ", "_") if customer else "client"
-    filename = f"{cname}_contact_logs_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    filename = f"Contact_Log_{cname.replace(' ', '_')}_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
     return StreamingResponse(
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
-
 
 @router.get("/dashboard/slug/{slug}")
 async def dashboard_by_slug(slug: str):
