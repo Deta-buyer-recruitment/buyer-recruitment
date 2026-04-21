@@ -451,7 +451,7 @@ async def export_contact_logs(customer_id: str):
         for i in range(0, len(buyer_ids), chunk_size):
             chunk = buyer_ids[i:i + chunk_size]
             chunk_logs = sb.table("contact_logs").select(
-                "buyer_id, attempt_no, contact_date, contact_method, replied, result, notes"
+                "buyer_id, attempt_no, contact_date, contact_method, replied, result"
             ).in_("buyer_id", chunk).order("contact_date").execute().data or []
             logs.extend(chunk_logs)
 
@@ -468,7 +468,7 @@ async def export_contact_logs(customer_id: str):
 
     # 헤더
     headers = ["No", "Company", "Country", "Contact Name", "Email",
-               "Attempt", "Contact Date", "Replied", "Result", "Method", "Notes"]
+               "Attempt", "Contact Date", "Replied", "Result", "Method"]
     header_fill = PatternFill("solid", fgColor="4F46E5")
     header_font = Font(bold=True, color="FFFFFF", size=10)
 
@@ -479,7 +479,7 @@ async def export_contact_logs(customer_id: str):
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     # 컬럼 너비
-    col_widths = [6, 28, 15, 20, 30, 10, 15, 10, 40, 15, 30]
+    col_widths = [6, 28, 15, 20, 30, 10, 15, 10, 40, 15]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -500,7 +500,6 @@ async def export_contact_logs(customer_id: str):
             "Y" if log.get("replied") else "N",
             log.get("result", ""),
             log.get("contact_method", ""),
-            log.get("notes", ""),
         ]
         for col, val in enumerate(row_data, 1):
             cell = ws.cell(row=i, column=col, value=val)
