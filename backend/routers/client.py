@@ -70,21 +70,47 @@ async def get_timeline(customer_id: str):
 
 class TimelineUpdate(BaseModel):
     step_no: int
-    status: str
+    status: Optional[str] = None
+    step_name: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     memo: Optional[str] = None
+
+
+def _safe_date(val: Optional[str]) -> Optional[str]:
+    """날짜 유효성 검사. 잘못된 날짜면 None 반환."""
+    if not val or not val.strip():
+        return None
+    from datetime import datetime as dt
+    for fmt in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d"):
+        try:
+            dt.strptime(val.strip(), fmt)
+            return val.strip()
+        except ValueError:
+            continue
+    return None
 
 
 @router.patch("/timeline/{customer_id}")
 async def update_timeline(customer_id: str, payload: TimelineUpdate):
     sb = get_supabase()
     data = {k: v for k, v in payload.dict().items() if v is not None and k != "step_no"}
+    # 날짜 유효성 검사
+    if "start_date" in data:
+        data["start_date"] = _safe_date(data["start_date"])
+        if data["start_date"] is None:
+            del data["start_date"]
+    if "end_date" in data:
+        data["end_date"] = _safe_date(data["end_date"])
+        if data["end_date"] is None:
+            del data["end_date"]
+    if not data:
+        return {"step_no": payload.step_no}
     data["updated_at"] = datetime.now().isoformat()
     result = sb.table("timelines").update(data).eq(
         "customer_id", customer_id
     ).eq("step_no", payload.step_no).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {"step_no": payload.step_no}
 
 
 class TimelineStepAdd(BaseModel):
