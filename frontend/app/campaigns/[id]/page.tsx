@@ -9,7 +9,7 @@ import {
   Play, Send, ArrowLeft, RefreshCw, ChevronDown, ChevronUp,
   Upload, Edit2, Save, X, Users, Search, Mail, Brain, FileText,
   MessageSquare, CheckSquare, Square, Image, Paperclip, Bot, User, Zap,
-  Trash2, AlertTriangle, Plus
+  Trash2, AlertTriangle, Plus, ChevronRight
 } from "lucide-react"
 import Link from "next/link"
 
@@ -36,6 +36,30 @@ const INFO_FIELDS = [
   { key: "signature_phone",     label: "Sender Phone" },
 ]
 
+// ── 접기/펼치기 섹션 컴포넌트 ──────────────────────────────────────
+function CollapsibleSection({
+  title, children, defaultOpen = true, badge
+}: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean; badge?: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</h2>
+          {badge}
+        </div>
+        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  )
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [campaign, setCampaign]   = useState<any>(null)
@@ -61,7 +85,13 @@ export default function ProjectDetailPage() {
   const [uploadingFile, setUploadingFile] = useState(false)
   const [projectFiles, setProjectFiles] = useState<any[]>([])
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
+
+  // 바이어 선택 (step 4 — 선별 실행용)
+  const [selectedBuyerIds, setSelectedBuyerIds] = useState<Set<string>>(new Set())
+  const [runningStep, setRunningStep] = useState<string | null>(null)
+
   const logEndRef = useRef<HTMLDivElement>(null)
+  const esRef = useRef<EventSource | null>(null)
 
   const load = async () => {
     try {
@@ -70,18 +100,10 @@ export default function ProjectDetailPage() {
       setEditForm(c.campaign_info || {})
       const b = await api.buyers.list(c.customer_id)
       setBuyers(b)
-      // 타임라인 로드
       const tlRes = await fetch(`${API}/api/client/timeline/${c.customer_id}`)
-      if (tlRes.ok) {
-        const tl = await tlRes.json()
-        setTimeline(tl)
-      }
-      // 업로드 파일 목록 로드
+      if (tlRes.ok) setTimeline(await tlRes.json())
       const filesRes = await fetch(`${API}/api/client/files/${c.customer_id}`)
-      if (filesRes.ok) {
-        const fl = await filesRes.json()
-        setProjectFiles(fl)
-      }
+      if (filesRes.ok) setProjectFiles(await filesRes.json())
     } finally { setLoading(false) }
   }
 
@@ -90,39 +112,40 @@ export default function ProjectDetailPage() {
 
   const stopAgent = async () => {
     try {
+      esRef.current?.close()
+      esRef.current = null
       await fetch(`${API}/api/agent/stop/${id}`, { method: "POST" })
       setRunning(false)
+      setRunningStep(null)
       setLogs(prev => [...prev, { message: "⏹ Agent 중지됨", level: "warn", timestamp: new Date().toISOString() }])
     } catch (e) {}
   }
 
-  const runStep = (stepKey: string) => {
+  const openSSE = (url: string, stepKey?: string) => {
     if (running) return
     setRunning(true)
-    setLogs(prev => [...prev, { message: `▶ ${STEPS.find(s => s.key === stepKey)?.label}`, level: "start", timestamp: new Date().toISOString() }])
-    const es = new EventSource(`${API}/api/agent/run-step/${id}?step=${stepKey}`)
+    setRunningStep(stepKey || null)
+    setLogs(prev => [...prev, { message: `▶ ${stepKey ? STEPS.find(s => s.key === stepKey)?.label : "Run All"}`, level: "start", timestamp: new Date().toISOString() }])
+    const es = new EventSource(url)
+    esRef.current = es
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (data.level === "done") { es.close(); setRunning(false); load(); return }
+        if (data.level === "done") { es.close(); esRef.current = null; setRunning(false); setRunningStep(null); load(); return }
         setLogs(prev => [...prev, data])
       } catch {}
     }
-    es.onerror = () => { es.close(); setRunning(false); load() }
+    es.onerror = () => { es.close(); esRef.current = null; setRunning(false); setRunningStep(null); load() }
+  }
+
+  const runStep = (stepKey: string) => {
+    // 선택된 바이어가 있으면 쿼리 파라미터로 전달 (백엔드 지원 시)
+    openSSE(`${API}/api/agent/run-step/${id}?step=${stepKey}`, stepKey)
   }
 
   const runAll = () => {
-    if (running) return
-    setRunning(true); setLogs([])
-    const es = new EventSource(api.agent.runUrl(id))
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        if (data.level === "done") { es.close(); setRunning(false); load(); return }
-        setLogs(prev => [...prev, data])
-      } catch {}
-    }
-    es.onerror = () => { es.close(); setRunning(false); load() }
+    setLogs([])
+    openSSE(api.agent.runUrl(id))
   }
 
   const uploadBuyers = async () => {
@@ -141,8 +164,7 @@ export default function ProjectDetailPage() {
     setDeleting(true)
     try {
       await fetch(`${API}/api/buyers/${deleteTarget.id}`, { method: "DELETE" })
-      setDeleteTarget(null)
-      load()
+      setDeleteTarget(null); load()
     } catch { }
     finally { setDeleting(false) }
   }
@@ -156,19 +178,13 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ step_name: newStepName.trim() })
       })
-      if (res.ok) {
-        const newStep = await res.json()
-        setTimeline(prev => [...prev, newStep])
-        setNewStepName("")
-      }
+      if (res.ok) { setTimeline(prev => [...prev, await res.json()]); setNewStepName("") }
     } catch {} finally { setAddingStep(false) }
   }
 
   const deleteTimelineStep = async (step_no: number) => {
     try {
-      await fetch(`${API}/api/client/timeline/${campaign.customer_id}/step/${step_no}`, {
-        method: "DELETE"
-      })
+      await fetch(`${API}/api/client/timeline/${campaign.customer_id}/step/${step_no}`, { method: "DELETE" })
       setTimeline(prev => prev.filter(t => t.step_no !== step_no))
     } catch {}
   }
@@ -181,16 +197,9 @@ export default function ProjectDetailPage() {
       form.append("file", projectFile)
       form.append("category", "report")
       form.append("uploader_id", "admin")
-      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, {
-        method: "POST", body: form
-      })
-      if (res.ok) {
-        toast.success(`${projectFile.name} uploaded!`)
-        setProjectFile(null)
-        load()
-      } else {
-        toast.error("Upload failed")
-      }
+      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, { method: "POST", body: form })
+      if (res.ok) { toast.success(`${projectFile.name} uploaded!`); setProjectFile(null); load() }
+      else toast.error("Upload failed")
     } catch { toast.error("Upload error") }
     finally { setUploadingFile(false) }
   }
@@ -199,15 +208,9 @@ export default function ProjectDetailPage() {
     if (!confirm(`"${fileName}" 파일을 삭제하시겠습니까?`)) return
     setDeletingFileId(fileId)
     try {
-      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/${fileId}`, {
-        method: "DELETE"
-      })
-      if (res.ok) {
-        toast.success("파일이 삭제되었습니다")
-        setProjectFiles(prev => prev.filter(f => f.id !== fileId))
-      } else {
-        toast.error("삭제에 실패했습니다")
-      }
+      const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/${fileId}`, { method: "DELETE" })
+      if (res.ok) { toast.success("파일이 삭제되었습니다"); setProjectFiles(prev => prev.filter(f => f.id !== fileId)) }
+      else toast.error("삭제에 실패했습니다")
     } catch { toast.error("삭제 중 오류가 발생했습니다") }
     finally { setDeletingFileId(null) }
   }
@@ -215,9 +218,6 @@ export default function ProjectDetailPage() {
   const saveTimeline = async (step_no: number, field: string, value: string) => {
     setSavingTimeline(true)
     try {
-      const step = timeline.find(t => t.step_no === step_no)
-      if (!step) return
-      const updated = { ...step, [field]: value }
       await fetch(`${API}/api/client/timeline/${campaign.customer_id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -234,8 +234,7 @@ export default function ProjectDetailPage() {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaign_info: editForm })
       })
-      toast.success("Project info updated")
-      setEditingInfo(false); load()
+      toast.success("Project info updated"); setEditingInfo(false); load()
     } catch { toast.error("Failed to update") }
     finally { setSavingInfo(false) }
   }
@@ -248,6 +247,19 @@ export default function ProjectDetailPage() {
       load()
     } catch (e: any) { toast.error(e.message) }
     finally { setSendingRound("") }
+  }
+
+  // 바이어 선택 토글
+  const toggleBuyerSelect = (buyerId: string) => {
+    setSelectedBuyerIds(prev => {
+      const next = new Set(prev)
+      next.has(buyerId) ? next.delete(buyerId) : next.add(buyerId)
+      return next
+    })
+  }
+  const toggleAllBuyers = () => {
+    if (selectedBuyerIds.size === buyers.length) setSelectedBuyerIds(new Set())
+    else setSelectedBuyerIds(new Set(buyers.map(b => b.id)))
   }
 
   if (loading) return (
@@ -265,6 +277,7 @@ export default function ProjectDetailPage() {
   const canSendR1 = ["review_pending", "templates_done"].includes(campaign.status)
   const canSendR2 = campaign.status === "r1_sent"
   const canSendR3 = campaign.status === "r2_sent"
+  const allBuyersSelected = selectedBuyerIds.size === buyers.length && buyers.length > 0
 
   const LOG_COLORS: Record<string, string> = {
     start: "#4F46E5", step: "#2563EB", success: "#059669",
@@ -315,8 +328,9 @@ export default function ProjectDetailPage() {
         {/* ── Overview Tab ── */}
         {tab === "overview" && (
           <div className="grid grid-cols-3 gap-6">
-            {/* Left */}
+            {/* ── Left Column ── */}
             <div className="col-span-1 space-y-4">
+
               {/* Buyer Upload */}
               <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
                 <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Buyer List from VOLZA</h2>
@@ -336,15 +350,23 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              {/* Steps */}
+              {/* Run Steps */}
               <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
                 <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Run Steps</h2>
                 <div className="space-y-2">
                   {STEPS.map(({ key, label, icon: Icon, desc }) => (
                     <button key={key} onClick={() => runStep(key)} disabled={running || buyers.length === 0}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-left group">
-                      <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0">
-                        <Icon size={13} className="text-slate-500 group-hover:text-indigo-600" />
+                      className={cn(
+                        "w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left group",
+                        runningStep === key
+                          ? "border-indigo-300 bg-indigo-50"
+                          : "border-slate-100 hover:border-indigo-200 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      )}>
+                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                        runningStep === key ? "bg-indigo-100" : "bg-slate-100 group-hover:bg-indigo-100")}>
+                        {runningStep === key
+                          ? <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                          : <Icon size={13} className="text-slate-500 group-hover:text-indigo-600" />}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-slate-700">{label}</p>
@@ -353,7 +375,7 @@ export default function ProjectDetailPage() {
                     </button>
                   ))}
                 </div>
-                <div className="border-t border-slate-100 mt-3 pt-3">
+                <div className="border-t border-slate-100 mt-3 pt-3 space-y-2">
                   <button onClick={runAll} disabled={running || buyers.length === 0}
                     className={cn("w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all",
                       running ? "bg-indigo-50 text-indigo-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed")}>
@@ -363,12 +385,37 @@ export default function ProjectDetailPage() {
                   </button>
                   {running && (
                     <button onClick={stopAgent}
-                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-all mt-2">
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-all">
                       ⏹ Stop Agent
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Agent Log — Run Steps 카드 바로 아래 세로 배치 */}
+              {(running || logs.length > 0) && (
+                <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">agent.log</span>
+                    {running && <div className="ml-auto w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />}
+                  </div>
+                  <div className="font-mono text-xs space-y-1 max-h-72 overflow-y-auto">
+                    {logs.map((log, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-slate-600 shrink-0">{new Date(log.timestamp).toLocaleTimeString("en", { hour12: false })}</span>
+                        <span style={{ color: LOG_COLORS[log.level] || "#CBD5E1" }}>{log.message}</span>
+                      </div>
+                    ))}
+                    {running && <div className="text-slate-600 animate-pulse">⠋ Processing...</div>}
+                    <div ref={logEndRef} />
+                  </div>
+                </div>
+              )}
 
               {/* Email Sending */}
               {(canSendR1 || canSendR2 || canSendR3) && (
@@ -416,31 +463,31 @@ export default function ProjectDetailPage() {
               )}
             </div>
 
-            {/* Right */}
+            {/* ── Right Column ── */}
             <div className="col-span-2 space-y-4">
-              {/* Project Info */}
-              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Project Info</h2>
-                  {!editingInfo ? (
-                    <button onClick={() => setEditingInfo(true)}
-                      className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
-                      <Edit2 size={11} /> Edit
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={saveInfo} disabled={savingInfo}
-                        className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-40">
-                        <Save size={11} /> {savingInfo ? "Saving..." : "Save"}
+
+              {/* Project Info — collapsible */}
+              <CollapsibleSection
+                title="Project Info"
+                badge={
+                  !editingInfo
+                    ? <button onClick={e => { e.stopPropagation(); setEditingInfo(true) }}
+                        className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 ml-2">
+                        <Edit2 size={11} /> Edit
                       </button>
-                      <button onClick={() => { setEditingInfo(false); setEditForm(info) }}
-                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5">
-                        <X size={11} /> Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                    : <div className="flex gap-2 ml-2" onClick={e => e.stopPropagation()}>
+                        <button onClick={saveInfo} disabled={savingInfo}
+                          className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 disabled:opacity-40">
+                          <Save size={11} /> {savingInfo ? "Saving..." : "Save"}
+                        </button>
+                        <button onClick={() => { setEditingInfo(false); setEditForm(info) }}
+                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2 py-1">
+                          <X size={11} /> Cancel
+                        </button>
+                      </div>
+                }
+              >
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   {INFO_FIELDS.map(({ key, label, multiline }) => (
                     <div key={key} className={multiline ? "col-span-2" : ""}>
                       <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">{label}</label>
@@ -460,17 +507,16 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </CollapsibleSection>
 
-              {/* 고객 타임라인 설정 */}
-              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
-                  Client Timeline Status
-                  {savingTimeline && <span className="text-[10px] text-indigo-400 font-normal">저장 중...</span>}
-                </h2>
-                <div className="space-y-2 mb-3">
+              {/* Client Timeline — collapsible */}
+              <CollapsibleSection
+                title="Client Timeline Status"
+                badge={savingTimeline ? <span className="text-[10px] text-indigo-400 font-normal ml-2">저장 중...</span> : undefined}
+              >
+                <div className="space-y-2 mb-3 pt-1">
                   {timeline.map(step => (
-                    <div key={step.step_no} className="flex items-center gap-2">
+                    <div key={step.step_no} className="flex items-center gap-2 flex-wrap">
                       <input
                         type="text"
                         value={step.step_name || ""}
@@ -488,15 +534,24 @@ export default function ProjectDetailPage() {
                         <option value="in_progress">진행중</option>
                         <option value="done">완료</option>
                       </select>
-                      <input type="text" value={step.start_date || ""}
+                      {/* ① 날짜 input — w-28로 넓혀서 10자리(2026-04-19) 입력 가능 */}
+                      <input
+                        type="text"
+                        value={step.start_date || ""}
                         onChange={e => saveTimeline(step.step_no, "start_date", e.target.value)}
                         placeholder="시작일"
-                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        maxLength={10}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                      />
                       <span className="text-slate-300 text-xs">~</span>
-                      <input type="text" value={step.end_date || ""}
+                      <input
+                        type="text"
+                        value={step.end_date || ""}
                         onChange={e => saveTimeline(step.step_no, "end_date", e.target.value)}
                         placeholder="종료일"
-                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-20 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        maxLength={10}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                      />
                       {step.step_no > 6 && (
                         <button onClick={() => deleteTimelineStep(step.step_no)}
                           className="p-1 text-red-300 hover:text-red-500 rounded hover:bg-red-50 transition-colors">
@@ -506,7 +561,6 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
-                {/* 단계 추가 */}
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                   <input
                     value={newStepName}
@@ -519,135 +573,150 @@ export default function ProjectDetailPage() {
                     <Plus size={11} /> 추가
                   </button>
                 </div>
-              </div>
+              </CollapsibleSection>
 
-              {/* 파일 업로드 (고객 대시보드 공유용) */}
-              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                  Upload Files (고객 공유)
-                </h2>
-                <label className={cn("flex items-center gap-2 border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all",
-                  projectFile ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50")}>
-                  <Upload size={14} className={projectFile ? "text-indigo-500" : "text-slate-400"} />
-                  <span className="text-xs text-slate-600 flex-1 truncate">
-                    {projectFile ? projectFile.name : "PDF 또는 Excel 파일 선택"}
-                  </span>
-                  <input type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden"
-                    onChange={e => setProjectFile(e.target.files?.[0] || null)} />
-                </label>
-                {projectFile && (
-                  <button onClick={uploadProjectFile} disabled={uploadingFile}
-                    className="mt-2 w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                    {uploadingFile
-                      ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />업로드 중...</>
-                      : <><Upload size={12} />고객 대시보드에 공유</>}
-                  </button>
-                )}
-                <p className="text-[10px] text-slate-400 mt-2">업로드한 파일은 고객 대시보드 Files 섹션에서 확인 가능</p>
-
-                {/* 업로드된 파일 목록 */}
-                {projectFiles.length > 0 && (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                      공유된 파일 ({projectFiles.length})
-                    </p>
-                    <div className="space-y-1.5">
-                      {projectFiles.map(f => (
-                        <div key={f.id} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
-                          <FileText size={12} className="text-indigo-400 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
-                            <p className="text-[10px] text-slate-400">
-                              {new Date(f.created_at).toLocaleDateString("ko")}
-                              {f.size_bytes ? ` · ${(f.size_bytes / 1024).toFixed(0)} KB` : ""}
-                            </p>
+              {/* Upload Files — collapsible */}
+              <CollapsibleSection title="Upload Files (고객 공유)">
+                <div className="pt-1">
+                  <label className={cn("flex items-center gap-2 border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all",
+                    projectFile ? "border-indigo-300 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50")}>
+                    <Upload size={14} className={projectFile ? "text-indigo-500" : "text-slate-400"} />
+                    <span className="text-xs text-slate-600 flex-1 truncate">
+                      {projectFile ? projectFile.name : "PDF 또는 Excel 파일 선택"}
+                    </span>
+                    <input type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden"
+                      onChange={e => setProjectFile(e.target.files?.[0] || null)} />
+                  </label>
+                  {projectFile && (
+                    <button onClick={uploadProjectFile} disabled={uploadingFile}
+                      className="mt-2 w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                      {uploadingFile
+                        ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />업로드 중...</>
+                        : <><Upload size={12} />고객 대시보드에 공유</>}
+                    </button>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-2">업로드한 파일은 고객 대시보드 Files 섹션에서 확인 가능</p>
+                  {projectFiles.length > 0 && (
+                    <div className="mt-4 border-t border-slate-100 pt-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">공유된 파일 ({projectFiles.length})</p>
+                      <div className="space-y-1.5">
+                        {projectFiles.map(f => (
+                          <div key={f.id} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                            <FileText size={12} className="text-indigo-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {new Date(f.created_at).toLocaleDateString("ko")}
+                                {f.size_bytes ? ` · ${(f.size_bytes / 1024).toFixed(0)} KB` : ""}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => deleteProjectFile(f.id, f.name)}
+                              disabled={deletingFileId === f.id}
+                              className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 shrink-0">
+                              {deletingFileId === f.id
+                                ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                                : <Trash2 size={12} />}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => deleteProjectFile(f.id, f.name)}
-                            disabled={deletingFileId === f.id}
-                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 shrink-0"
-                            title="파일 삭제">
-                            {deletingFileId === f.id
-                              ? <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                              : <Trash2 size={12} />}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Agent Log */}
-              {(running || logs.length > 0) && (
-                <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                    </div>
-                    <span className="text-xs text-slate-400 font-mono">agent.log</span>
-                    {running && <div className="ml-auto w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />}
-                  </div>
-                  <div className="font-mono text-xs space-y-1 max-h-64 overflow-y-auto">
-                    {logs.map((log, i) => (
-                      <div key={i} className="flex gap-2">
-                        <span className="text-slate-600 shrink-0">{new Date(log.timestamp).toLocaleTimeString("en", { hour12: false })}</span>
-                        <span style={{ color: LOG_COLORS[log.level] || "#CBD5E1" }}>{log.message}</span>
+                        ))}
                       </div>
-                    ))}
-                    {running && <div className="text-slate-600 animate-pulse">⠋ Processing...</div>}
-                    <div ref={logEndRef} />
-                  </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </CollapsibleSection>
 
-              {/* 바이어 결과 확인 */}
+              {/* ④ Buyer Results — 선택 체크박스 + 선별 실행 */}
               {buyers.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-                    <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Buyer Results <span className="text-indigo-600 font-bold ml-1">{buyers.length}</span>
-                    </h2>
+                <CollapsibleSection
+                  title="Buyer Results"
+                  badge={
+                    <span className="text-indigo-600 font-bold text-xs ml-1">{buyers.length}</span>
+                  }
+                >
+                  {/* 통계 + 전체선택 */}
+                  <div className="flex items-center justify-between mb-3 pt-1">
                     <div className="flex gap-3 text-[10px] text-slate-400">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" />웹사이트 있음: {buyers.filter(b => b.website).length}</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />이메일 있음: {buyers.filter(b => b.email).length}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" />웹사이트: {buyers.filter(b => b.website).length}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />이메일: {buyers.filter(b => b.email).length}</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />ABM: {campaign.abm_analysis?.length || 0}</span>
                     </div>
+                    <button onClick={toggleAllBuyers}
+                      className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                      {allBuyersSelected ? <CheckSquare size={13} /> : <Square size={13} />}
+                      {allBuyersSelected ? "전체 해제" : "전체 선택"}
+                    </button>
                   </div>
-                  <div className="overflow-auto max-h-72">
+
+                  {/* 선택 시 선별 실행 버튼 */}
+                  {selectedBuyerIds.size > 0 && (
+                    <div className="mb-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <p className="text-xs text-indigo-700 font-medium mb-2">
+                        {selectedBuyerIds.size}개 바이어 선택됨 — 선별 실행:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {STEPS.map(({ key, label, icon: Icon }) => (
+                          <button key={key} onClick={() => runStep(key)} disabled={running}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 transition-colors">
+                            {runningStep === key
+                              ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                              : <Icon size={11} />}
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 테이블 */}
+                  <div className="overflow-auto max-h-96 rounded-xl border border-slate-100">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-50 sticky top-0">
                         <tr>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">No.</th>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Company</th>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Country</th>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Website</th>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">Email</th>
-                          <th className="text-left px-4 py-2.5 text-slate-500 font-semibold">ABM</th>
-                          <th className="px-4 py-2.5"></th>
+                          <th className="px-3 py-2.5">
+                            <button onClick={toggleAllBuyers}>
+                              <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center",
+                                allBuyersSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
+                                {allBuyersSelected && <span className="text-white text-[9px] font-bold">✓</span>}
+                              </div>
+                            </button>
+                          </th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">No.</th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">Company</th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">Country</th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">Website</th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">Email</th>
+                          <th className="text-left px-3 py-2.5 text-slate-500 font-semibold">ABM</th>
+                          <th className="px-3 py-2.5"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {buyers.map((b: any) => {
                           const abm = campaign.abm_analysis?.find((a: any) => a.id === b.id)
+                          const selected = selectedBuyerIds.has(b.id)
                           return (
-                            <tr key={b.id} className="hover:bg-slate-50">
-                              <td className="px-4 py-2 text-slate-400">{b.no}</td>
-                              <td className="px-4 py-2 font-medium text-slate-700 max-w-[150px] truncate">{b.company}</td>
-                              <td className="px-4 py-2 text-slate-500">{b.country}</td>
-                              <td className="px-4 py-2">
+                            <tr key={b.id} className={cn("hover:bg-slate-50 cursor-pointer", selected && "bg-indigo-50")}
+                              onClick={() => toggleBuyerSelect(b.id)}>
+                              <td className="px-3 py-2">
+                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center",
+                                  selected ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
+                                  {selected && <span className="text-white text-[9px] font-bold">✓</span>}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-slate-400">{b.no}</td>
+                              <td className="px-3 py-2 font-medium text-slate-700 max-w-[140px] truncate">{b.company}</td>
+                              <td className="px-3 py-2 text-slate-500">{b.country}</td>
+                              <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                                 {b.website
-                                  ? <a href={b.website} target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline truncate block max-w-[120px]">✓ {b.website.replace(/https?:\/\/(www\.)?/, '')}</a>
+                                  ? <a href={b.website} target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline truncate block max-w-[110px]">✓ {b.website.replace(/https?:\/\/(www\.)?/, '')}</a>
                                   : <span className="text-slate-300">—</span>}
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-3 py-2">
                                 {b.email
-                                  ? <span className="text-green-600 truncate block max-w-[140px]">✓ {b.email}</span>
+                                  ? <span className="text-green-600 truncate block max-w-[130px]">✓ {b.email}</span>
                                   : <span className="text-slate-300">—</span>}
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-3 py-2">
                                 {abm
                                   ? <span className={cn("px-1.5 py-0.5 rounded-full font-bold text-[10px]",
                                       abm.priority === 1 ? "bg-indigo-100 text-indigo-700"
@@ -657,7 +726,7 @@ export default function ProjectDetailPage() {
                                     </span>
                                   : <span className="text-slate-300">—</span>}
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                                 <button onClick={() => setDeleteTarget(b)}
                                   className="p-1 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
                                   <Trash2 size={12} />
@@ -669,7 +738,7 @@ export default function ProjectDetailPage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </CollapsibleSection>
               )}
             </div>
           </div>
@@ -699,9 +768,6 @@ export default function ProjectDetailPage() {
                 <p className="text-xs text-slate-400 mt-0.5">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-600 mb-1">
-              Are you sure you want to permanently delete:
-            </p>
             <div className="bg-red-50 rounded-xl px-4 py-3 mb-5">
               <p className="font-semibold text-slate-800 text-sm">{deleteTarget.company}</p>
               <p className="text-xs text-slate-500 mt-0.5">{deleteTarget.country} · {deleteTarget.email || "No email"}</p>
@@ -764,11 +830,8 @@ function TemplateChat({ campaign, buyers, templates, onSave }: {
   }
 
   const toggleAll = () => {
-    if (selectedBuyerIds.size === buyers.length) {
-      setSelectedBuyerIds(new Set())
-    } else {
-      setSelectedBuyerIds(new Set(buyers.map(b => b.id)))
-    }
+    if (selectedBuyerIds.size === buyers.length) setSelectedBuyerIds(new Set())
+    else setSelectedBuyerIds(new Set(buyers.map(b => b.id)))
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -784,25 +847,20 @@ function TemplateChat({ campaign, buyers, templates, onSave }: {
 
   const sendMessage = async () => {
     if ((!input.trim() && !imageFile) || streaming) return
-
     const selectedBuyers = buyers.filter(b => selectedBuyerIds.has(b.id))
     const selectedTemplates = currentTemplates.filter(t =>
       selectedBuyers.some(b => b.company === t.consignee_name || b.email === t.contact_email)
     )
-
     const userMsg: ChatMessage = { role: "user", content: input, imageUrl: imagePreview || undefined }
     setMessages(prev => [...prev, userMsg])
     setInput("")
     setStreaming(true)
-
-    // 이미지 base64 변환
     let imageBase64 = ""
     let imageType = ""
     if (imageFile) {
       imageBase64 = (imagePreview || "").split(",")[1] || ""
       imageType = imageFile.type || "image/jpeg"
     }
-
     try {
       const systemPrompt = `You are a B2B email template expert for overseas buyer outreach.
 
@@ -826,11 +884,8 @@ When user asks to modify/regenerate templates:
 4. If user uploads an image, use it as context (e.g., product photo, catalog) to improve the email.
 `
       const msgContent: any[] = []
-      if (imageBase64) {
-        msgContent.push({ type: "image", source: { type: "base64", media_type: imageType, data: imageBase64 } })
-      }
+      if (imageBase64) msgContent.push({ type: "image", source: { type: "base64", media_type: imageType, data: imageBase64 } })
       msgContent.push({ type: "text", text: input || "Please review the current templates and suggest improvements." })
-
       const allMessages = [
         ...messages.map(m => ({
           role: m.role,
@@ -840,35 +895,24 @@ When user asks to modify/regenerate templates:
         })),
         { role: "user", content: msgContent }
       ]
-
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          system: systemPrompt,
-          messages: allMessages,
-        })
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: systemPrompt, messages: allMessages })
       })
-
       const data = await response.json()
       const text = data.content?.[0]?.text || ""
-
-      // JSON 코드블록 파싱해서 템플릿 업데이트
       const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/)
       if (jsonMatch) {
         try {
           const newTemplates = JSON.parse(jsonMatch[1])
           if (Array.isArray(newTemplates)) {
-            // 선택된 바이어의 템플릿만 업데이트
             const updated = [...currentTemplates]
             newTemplates.forEach(nt => {
               const idx = updated.findIndex(t => t.consignee_name === nt.consignee_name || t.contact_email === nt.contact_email)
               if (idx >= 0) { updated[idx] = nt } else { updated.push(nt) }
             })
             setCurrentTemplates(updated)
-            // Supabase에 저장
             await fetch(`${API}/api/campaigns/${campaign.id}/templates`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
@@ -878,7 +922,6 @@ When user asks to modify/regenerate templates:
           }
         } catch {}
       }
-
       setMessages(prev => [...prev, { role: "assistant", content: text }])
       removeImage()
     } catch (e: any) {
@@ -900,42 +943,36 @@ When user asks to modify/regenerate templates:
 
   return (
     <div className="grid grid-cols-5 gap-5 h-[calc(100vh-260px)]">
-
-      {/* 왼쪽 — 바이어 선택 + 템플릿 목록 */}
       <div className="col-span-2 flex flex-col gap-4 overflow-hidden">
-
-        {/* 바이어 선택 */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Select Buyers</h3>
-            <button onClick={toggleAll}
-              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
+            <button onClick={toggleAll} className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
               {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
               {allSelected ? "Deselect All" : "Select All"}
             </button>
           </div>
           <div className="overflow-y-auto flex-1">
-            {buyers.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">No buyers loaded</div>
-            ) : buyers.map(b => {
-              const selected = selectedBuyerIds.has(b.id)
-              const hasTmpl = currentTemplates.some(t => t.consignee_name === b.company || t.contact_email === b.email)
-              return (
-                <button key={b.id} onClick={() => toggleBuyer(b.id)}
-                  className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0",
-                    selected && "bg-indigo-50")}>
-                  <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                    selected ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
-                    {selected && <span className="text-white text-[9px] font-bold">✓</span>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-slate-800 truncate">{b.company}</p>
-                    <p className="text-[10px] text-slate-400 truncate">{b.country} · {b.email || "no email"}</p>
-                  </div>
-                  {hasTmpl && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">✓ tmpl</span>}
-                </button>
-              )
-            })}
+            {buyers.length === 0
+              ? <div className="py-8 text-center text-xs text-slate-400">No buyers loaded</div>
+              : buyers.map(b => {
+                  const selected = selectedBuyerIds.has(b.id)
+                  const hasTmpl = currentTemplates.some(t => t.consignee_name === b.company || t.contact_email === b.email)
+                  return (
+                    <button key={b.id} onClick={() => toggleBuyer(b.id)}
+                      className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0", selected && "bg-indigo-50")}>
+                      <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                        selected ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
+                        {selected && <span className="text-white text-[9px] font-bold">✓</span>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{b.company}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{b.country} · {b.email || "no email"}</p>
+                      </div>
+                      {hasTmpl && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">✓ tmpl</span>}
+                    </button>
+                  )
+                })}
           </div>
           {selectedBuyerIds.size > 0 && (
             <div className="px-4 py-2.5 bg-indigo-50 border-t border-indigo-100 shrink-0">
@@ -943,8 +980,6 @@ When user asks to modify/regenerate templates:
             </div>
           )}
         </div>
-
-        {/* 템플릿 미리보기 */}
         {previewTemplate && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col flex-1">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -969,20 +1004,13 @@ When user asks to modify/regenerate templates:
               <p className="text-[10px] font-semibold text-slate-500 px-3 py-2 bg-slate-50 border-b border-slate-100">
                 {previewTemplate[previewRound]?.subject}
               </p>
-              <iframe
-                srcDoc={previewTemplate[previewRound]?.body || "<p>No template</p>"}
-                className="w-full h-full bg-white"
-                sandbox="allow-same-origin"
-              />
+              <iframe srcDoc={previewTemplate[previewRound]?.body || "<p>No template</p>"} className="w-full h-full bg-white" sandbox="allow-same-origin" />
             </div>
           </div>
         )}
       </div>
 
-      {/* 오른쪽 — Claude 채팅 */}
       <div className="col-span-3 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-
-        {/* 채팅 헤더 */}
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-3 shrink-0">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
             <Bot size={15} className="text-white" />
@@ -996,8 +1024,6 @@ When user asks to modify/regenerate templates:
             </p>
           </div>
         </div>
-
-        {/* 메시지 영역 */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3">
@@ -1006,18 +1032,10 @@ When user asks to modify/regenerate templates:
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-700">Start editing templates with Claude</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                  Select buyers, then ask Claude to rewrite, adjust tone, add product images, or translate templates.
-                </p>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">Select buyers, then ask Claude to rewrite, adjust tone, add product images, or translate templates.</p>
               </div>
               <div className="flex flex-wrap gap-2 justify-center mt-2">
-                {[
-                  "Make it more formal",
-                  "Add a product photo context",
-                  "Translate to German",
-                  "Make the subject line more compelling",
-                  "Shorten the email body",
-                ].map(suggestion => (
+                {["Make it more formal", "Add a product photo context", "Translate to German", "Make the subject line more compelling", "Shorten the email body"].map(suggestion => (
                   <button key={suggestion} onClick={() => setInput(suggestion)}
                     className="text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 px-3 py-1.5 rounded-full transition-colors">
                     {suggestion}
@@ -1026,7 +1044,6 @@ When user asks to modify/regenerate templates:
               </div>
             </div>
           )}
-
           {messages.map((msg, i) => (
             <div key={i} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}>
               {msg.role === "assistant" && (
@@ -1035,12 +1052,8 @@ When user asks to modify/regenerate templates:
                 </div>
               )}
               <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-sm",
-                msg.role === "user"
-                  ? "bg-indigo-600 text-white rounded-br-sm"
-                  : "bg-slate-100 text-slate-800 rounded-bl-sm")}>
-                {msg.imageUrl && (
-                  <img src={msg.imageUrl} alt="attached" className="max-h-40 rounded-xl mb-2 object-cover" />
-                )}
+                msg.role === "user" ? "bg-indigo-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-800 rounded-bl-sm")}>
+                {msg.imageUrl && <img src={msg.imageUrl} alt="attached" className="max-h-40 rounded-xl mb-2 object-cover" />}
                 {msg.role === "assistant" ? (
                   <div className="prose prose-xs max-w-none">
                     {msg.content.split("```json").map((part, pi) => {
@@ -1065,9 +1078,7 @@ When user asks to modify/regenerate templates:
                               </div>
                             </div>
                           )}
-                          {rest.join("```").trim() && (
-                            <p className="whitespace-pre-wrap text-xs mt-2">{rest.join("```").trim()}</p>
-                          )}
+                          {rest.join("```").trim() && <p className="whitespace-pre-wrap text-xs mt-2">{rest.join("```").trim()}</p>}
                         </div>
                       )
                     })}
@@ -1083,7 +1094,6 @@ When user asks to modify/regenerate templates:
               )}
             </div>
           ))}
-
           {streaming && (
             <div className="flex gap-3">
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
@@ -1092,8 +1102,7 @@ When user asks to modify/regenerate templates:
               <div className="bg-slate-100 rounded-2xl rounded-bl-sm px-4 py-3">
                 <div className="flex gap-1.5 items-center">
                   {[0, 1, 2].map(i => (
-                    <div key={i} className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }} />
+                    <div key={i} className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                   ))}
                 </div>
               </div>
@@ -1101,26 +1110,19 @@ When user asks to modify/regenerate templates:
           )}
           <div ref={chatEndRef} />
         </div>
-
-        {/* 이미지 미리보기 */}
         {imagePreview && (
           <div className="px-5 py-2 border-t border-slate-100 bg-slate-50 shrink-0">
             <div className="relative w-fit">
               <img src={imagePreview} alt="preview" className="h-16 rounded-xl object-cover" />
-              <button onClick={removeImage}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600">
+              <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600">
                 <X size={10} />
               </button>
             </div>
           </div>
         )}
-
-        {/* 입력창 */}
         <div className="px-4 py-3 border-t border-slate-100 shrink-0">
           {selectedBuyerIds.size === 0 && (
-            <p className="text-xs text-amber-500 mb-2 flex items-center gap-1">
-              ⚠ Select at least one buyer to edit their templates
-            </p>
+            <p className="text-xs text-amber-500 mb-2 flex items-center gap-1">⚠ Select at least one buyer to edit their templates</p>
           )}
           <div className="flex gap-2 items-end">
             <div className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-indigo-300 focus-within:border-indigo-300">
@@ -1141,9 +1143,7 @@ When user asks to modify/regenerate templates:
               </button>
               <button onClick={sendMessage} disabled={streaming || selectedBuyerIds.size === 0 || (!input.trim() && !imageFile)}
                 className="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl text-white transition-colors">
-                {streaming
-                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Send size={14} />}
+                {streaming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={14} />}
               </button>
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />

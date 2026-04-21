@@ -295,6 +295,9 @@ async def run_step_pipeline(campaign_id: str, step: str, should_stop=None):
             no_email = [b for b in buyers if not b.get("email")]
             found = 0
             for buyer in no_email:
+                if should_stop and should_stop():
+                    yield make_log("⏹ Agent 중지됨", "warn")
+                    return
                 yield make_log(f"  Hunter.io: {buyer['company']}", "info")
                 result = enrich_buyer_contacts(buyer.get("website", ""), buyer.get("email", ""))
                 update_data = {}
@@ -342,6 +345,10 @@ JSON 배열만 반환: [{{"id":"...","priority":1,"matching_points":["..."],"key
             templates = []
             yield make_log(f"✉️ 이메일 템플릿 생성 시작", "step")
             for buyer in buyers:
+                if should_stop and should_stop():
+                    yield make_log("⏹ Agent 중지됨", "warn")
+                    sb.table("campaigns").update({"email_templates": templates, "status": "review_pending"}).eq("id", campaign_id).execute()
+                    return
                 contacts = []
                 if buyer.get("email"):   contacts.append({"name": buyer.get("contact_name",""), "email": buyer["email"]})
                 if buyer.get("email2"):  contacts.append({"name": buyer.get("contact_name2",""), "email": buyer["email2"]})
