@@ -79,6 +79,7 @@ export default function ProjectDetailPage() {
   const [deleting, setDeleting]     = useState(false)
   const [timeline, setTimeline]     = useState<any[]>([])
   const [savingTimeline, setSavingTimeline] = useState(false)
+  const [localTimeline, setLocalTimeline] = useState<any[]>([])
   const [newStepName, setNewStepName] = useState("")
   const [addingStep, setAddingStep] = useState(false)
   const [projectFiles_upload, setProjectFilesUpload] = useState<File[]>([])
@@ -101,7 +102,11 @@ export default function ProjectDetailPage() {
       const b = await api.buyers.list(c.customer_id)
       setBuyers(b)
       const tlRes = await fetch(`${API}/api/client/timeline/${c.customer_id}`)
-      if (tlRes.ok) setTimeline(await tlRes.json())
+      if (tlRes.ok) {
+        const tl = await tlRes.json()
+        setTimeline(tl)
+        setLocalTimeline(tl)
+      }
       const filesRes = await fetch(`${API}/api/client/files/${c.customer_id}`)
       if (filesRes.ok) setProjectFiles(await filesRes.json())
     } finally { setLoading(false) }
@@ -194,14 +199,21 @@ export default function ProjectDetailPage() {
     setUploadingFile(true)
     let successCount = 0
     try {
-      for (const file of projectFiles_upload) {
+      for (let i = 0; i < projectFiles_upload.length; i++) {
+        const file = projectFiles_upload[i]
+        // 파일명에 밀리초+랜덤값 추가 → 동시/추가 업로드 시 경로 충돌 방지
+        const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`
+        const renamedFile = new File([file], uniqueName, { type: file.type })
         const form = new FormData()
-        form.append("file", file)
+        form.append("file", renamedFile)
+        form.append("original_name", file.name)  // 원본 파일명 따로 전달
         form.append("category", "report")
         form.append("uploader_id", "admin")
         const res = await fetch(`${API}/api/client/files/${campaign.customer_id}/upload`, { method: "POST", body: form })
         if (res.ok) successCount++
         else toast.error(`${file.name} 업로드 실패`)
+        // 순차 업로드 — 파일 간 300ms 딜레이
+        if (i < projectFiles_upload.length - 1) await new Promise(r => setTimeout(r, 300))
       }
       if (successCount > 0) {
         toast.success(`${successCount}개 파일 업로드 완료!`)
@@ -225,6 +237,12 @@ export default function ProjectDetailPage() {
     finally { setDeletingFileId(null) }
   }
 
+  // 로컬만 업데이트 (타이핑 중)
+  const updateLocal = (step_no: number, field: string, value: string) => {
+    setLocalTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
+  }
+
+  // 포커스 이탈 시 API 저장
   const saveTimeline = async (step_no: number, field: string, value: string) => {
     setSavingTimeline(true)
     try {
@@ -234,6 +252,7 @@ export default function ProjectDetailPage() {
         body: JSON.stringify({ step_no, [field]: value })
       })
       setTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
+      setLocalTimeline(prev => prev.map(t => t.step_no === step_no ? { ...t, [field]: value } : t))
     } catch { } finally { setSavingTimeline(false) }
   }
 
@@ -529,8 +548,9 @@ export default function ProjectDetailPage() {
                     <div key={step.step_no} className="flex items-center gap-2 flex-wrap">
                       <input
                         type="text"
-                        value={step.step_name || ""}
-                        onChange={e => saveTimeline(step.step_no, "step_name", e.target.value)}
+                        value={localTimeline.find(t => t.step_no === step.step_no)?.step_name ?? step.step_name ?? ""}
+                        onChange={e => updateLocal(step.step_no, "step_name", e.target.value)}
+                        onBlur={e => saveTimeline(step.step_no, "step_name", e.target.value)}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                       />
                       <select
@@ -547,8 +567,9 @@ export default function ProjectDetailPage() {
                       {/* ① 날짜 input — w-28로 넓혀서 10자리(2026-04-19) 입력 가능 */}
                       <input
                         type="text"
-                        value={step.start_date || ""}
-                        onChange={e => saveTimeline(step.step_no, "start_date", e.target.value)}
+                        value={localTimeline.find(t => t.step_no === step.step_no)?.start_date ?? step.start_date ?? ""}
+                        onChange={e => updateLocal(step.step_no, "start_date", e.target.value)}
+                        onBlur={e => saveTimeline(step.step_no, "start_date", e.target.value)}
                         placeholder="시작일"
                         maxLength={10}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"
@@ -556,8 +577,9 @@ export default function ProjectDetailPage() {
                       <span className="text-slate-300 text-xs">~</span>
                       <input
                         type="text"
-                        value={step.end_date || ""}
-                        onChange={e => saveTimeline(step.step_no, "end_date", e.target.value)}
+                        value={localTimeline.find(t => t.step_no === step.step_no)?.end_date ?? step.end_date ?? ""}
+                        onChange={e => updateLocal(step.step_no, "end_date", e.target.value)}
+                        onBlur={e => saveTimeline(step.step_no, "end_date", e.target.value)}
                         placeholder="종료일"
                         maxLength={10}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-indigo-300"

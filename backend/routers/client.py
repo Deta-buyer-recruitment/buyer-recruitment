@@ -136,19 +136,25 @@ async def upload_file(
     customer_id: str,
     category: str = Form("report"),
     uploader_id: str = Form(...),
+    original_name: Optional[str] = Form(None),
     file: UploadFile = File(...)
 ):
+    import random, string
     sb = get_supabase()
     contents = await file.read()
-    storage_path = f"{customer_id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
-    # upsert=True: 같은 경로 파일이 있어도 덮어쓰기
+    # 밀리초+랜덤 5자리로 경로 고유화 → 동시/추가 업로드 충돌 방지
+    rand_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    storage_path = f"{customer_id}/{ts}_{rand_suffix}_{file.filename}"
     sb.storage.from_(STORAGE_BUCKET).upload(
         storage_path, contents,
         file_options={"content-type": file.content_type or "application/octet-stream", "upsert": "true"}
     )
+    # DB에는 original_name이 있으면 원본 파일명으로 저장
+    display_name = original_name or file.filename
     result = sb.table("project_files").insert({
         "customer_id": customer_id,
-        "name": file.filename,
+        "name": display_name,
         "category": category,
         "storage_path": storage_path,
         "size_bytes": len(contents),
