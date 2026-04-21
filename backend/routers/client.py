@@ -294,7 +294,7 @@ async def _build_dashboard(customer_id: str) -> dict:
     if buyer_ids:
         logs_result = sb.table("contact_logs").select(
             "buyer_id, attempt_no, contact_date, replied"
-        ).in_("buyer_id", buyer_ids).execute().data or []
+        ).in_("buyer_id", buyer_ids).limit(10000).execute().data or []
         all_logs = logs_result
 
     if not timeline:
