@@ -824,6 +824,7 @@ export default function ProjectDetailPage() {
                                   <input
                                     value={editBuyerForm.website}
                                     onChange={e => setEditBuyerForm(p => ({ ...p, website: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === "Enter") saveBuyer(b.id) }}
                                     placeholder="https://..."
                                     className="text-[10px] border border-amber-300 rounded px-1.5 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
                                   />
@@ -843,6 +844,7 @@ export default function ProjectDetailPage() {
                                   <input
                                     value={editBuyerForm.email}
                                     onChange={e => setEditBuyerForm(p => ({ ...p, email: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === "Enter") saveBuyer(b.id) }}
                                     placeholder="email@..."
                                     className="text-[10px] border border-amber-300 rounded px-1.5 py-1 w-28 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
                                   />
@@ -869,24 +871,24 @@ export default function ProjectDetailPage() {
                               <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                                 {isEditing ? (
                                   <div className="flex gap-1">
-                                    <button onClick={() => saveBuyer(b.id)} disabled={savingBuyer}
+                                    <button onClick={e => { e.stopPropagation(); saveBuyer(b.id) }} disabled={savingBuyer}
                                       className="p-1 text-white bg-indigo-500 hover:bg-indigo-600 rounded transition-colors disabled:opacity-40">
                                       <Save size={11} />
                                     </button>
-                                    <button onClick={() => setEditingBuyerId(null)}
+                                    <button onClick={e => { e.stopPropagation(); setEditingBuyerId(null) }}
                                       className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors">
                                       <X size={11} />
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                                    <button onClick={() => startEditBuyer(b)}
-                                      className="p-1 text-slate-300 hover:text-indigo-500 rounded hover:bg-indigo-50 transition-colors"
+                                  <div className="flex gap-1">
+                                    <button onClick={e => { e.stopPropagation(); startEditBuyer(b) }}
+                                      className="p-1 text-slate-400 hover:text-indigo-500 rounded hover:bg-indigo-50 transition-colors"
                                       title="편집">
                                       <Edit2 size={11} />
                                     </button>
-                                    <button onClick={() => setDeleteTarget(b)}
-                                      className="p-1 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                                    <button onClick={e => { e.stopPropagation(); setDeleteTarget(b) }}
+                                      className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
                                       <Trash2 size={12} />
                                     </button>
                                   </div>
