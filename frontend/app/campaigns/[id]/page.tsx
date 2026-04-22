@@ -1033,8 +1033,16 @@ When user asks to modify/regenerate templates:
                   const selected = selectedBuyerIds.has(b.id)
                   const hasTmpl = currentTemplates.some(t => t.consignee_name === b.company || t.contact_email === b.email)
                   return (
-                    <button key={b.id} onClick={() => toggleBuyer(b.id)}
-                      className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0", selected && "bg-indigo-50")}>
+                    <button key={b.id} onClick={() => {
+                        toggleBuyer(b.id)
+                        // 템플릿 있으면 클릭 시 자동 미리보기
+                        const tmpl = currentTemplates.find(t => t.consignee_name === b.company || t.contact_email === b.email)
+                        if (tmpl) { setPreviewTemplate(tmpl); setPreviewRound("r1_initial") }
+                      }}
+                      className={cn("w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0",
+                        selected && "bg-indigo-50",
+                        hasTmpl && previewTemplate?.consignee_name === b.company && "border-l-2 border-l-indigo-400"
+                      )}>
                       <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                         selected ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
                         {selected && <span className="text-white text-[9px] font-bold">✓</span>}
@@ -1043,7 +1051,9 @@ When user asks to modify/regenerate templates:
                         <p className="text-xs font-medium text-slate-800 truncate">{b.company}</p>
                         <p className="text-[10px] text-slate-400 truncate">{b.country} · {b.email || "no email"}</p>
                       </div>
-                      {hasTmpl && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">✓ tmpl</span>}
+                      {hasTmpl
+                        ? <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">✓ 미리보기</span>
+                        : <span className="text-[10px] text-slate-300 px-1.5 py-0.5 rounded-full shrink-0">no tmpl</span>}
                     </button>
                   )
                 })}
@@ -1054,34 +1064,64 @@ When user asks to modify/regenerate templates:
             </div>
           )}
         </div>
-        {previewTemplate && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col flex-1">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-700 truncate">{previewTemplate.consignee_name}</p>
-                <p className="text-[10px] text-slate-400 truncate">{previewTemplate.contact_email}</p>
-              </div>
+        {/* 템플릿 미리보기 패널 — 항상 표시 */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div className="flex-1 min-w-0">
+              {previewTemplate ? (
+                <>
+                  <p className="text-xs font-semibold text-slate-700 truncate">{previewTemplate.consignee_name}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{previewTemplate.contact_email}</p>
+                </>
+              ) : (
+                <p className="text-xs font-semibold text-slate-400">Template Preview</p>
+              )}
+            </div>
+            {previewTemplate && (
               <button onClick={() => setPreviewTemplate(null)} className="text-slate-300 hover:text-slate-500 ml-2">
                 <X size={14} />
               </button>
-            </div>
-            <div className="flex gap-1 px-3 py-2 border-b border-slate-100 shrink-0 flex-wrap">
-              {ROUND_OPTIONS.map(r => (
-                <button key={r.key} onClick={() => setPreviewRound(r.key)}
-                  className={cn("text-[10px] font-medium px-2 py-1 rounded-lg transition-colors",
-                    previewRound === r.key ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200")}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-[10px] font-semibold text-slate-500 px-3 py-2 bg-slate-50 border-b border-slate-100">
-                {previewTemplate[previewRound]?.subject}
-              </p>
-              <iframe srcDoc={previewTemplate[previewRound]?.body || "<p>No template</p>"} className="w-full h-full bg-white" sandbox="allow-same-origin" />
-            </div>
+            )}
           </div>
-        )}
+
+          {previewTemplate ? (
+            <>
+              {/* 차수 탭 */}
+              <div className="flex gap-1 px-3 py-2 border-b border-slate-100 shrink-0 flex-wrap">
+                {ROUND_OPTIONS.map(r => (
+                  <button key={r.key} onClick={() => setPreviewRound(r.key)}
+                    className={cn("text-[10px] font-medium px-2 py-1 rounded-lg transition-colors",
+                      previewRound === r.key ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200")}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              {/* Subject */}
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 shrink-0">
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-0.5">Subject</p>
+                <p className="text-xs font-medium text-slate-700">{previewTemplate[previewRound]?.subject || "—"}</p>
+              </div>
+              {/* Body iframe */}
+              <div className="flex-1 overflow-hidden">
+                <iframe
+                  srcDoc={previewTemplate[previewRound]?.body || "<p style='color:#aaa;padding:16px;font-size:13px;'>No template body</p>"}
+                  className="w-full h-full bg-white"
+                  sandbox="allow-same-origin"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
+                <FileText size={18} className="text-slate-300" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-500">바이어를 클릭하면</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">이메일 템플릿을 미리볼 수 있어요</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="col-span-3 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
