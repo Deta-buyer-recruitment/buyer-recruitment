@@ -1016,8 +1016,8 @@ When user asks to modify/regenerate templates:
   const allSelected = selectedBuyerIds.size === buyers.length && buyers.length > 0
 
   return (
-    <div className="grid grid-cols-5 gap-5 h-[calc(100vh-260px)]">
-      <div className="col-span-1 flex flex-col gap-4 overflow-hidden">
+    <div className="grid grid-cols-7 gap-5 h-[calc(100vh-260px)]">
+      <div className="col-span-2 flex flex-col gap-4 overflow-hidden">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Select Buyers</h3>
@@ -1067,7 +1067,7 @@ When user asks to modify/regenerate templates:
       </div>
 
       {/* 미리보기 패널 — 독립 col-span-2 */}
-      <div className="col-span-2 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="col-span-3 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex-1 min-w-0">
             {previewTemplate ? (
